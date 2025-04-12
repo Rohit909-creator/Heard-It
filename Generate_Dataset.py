@@ -83,10 +83,11 @@ if __name__ == "__main__":
         s = f.read()
     words = s.split('\n')
     print(words)
-    
+    # words = ["Hello"]
     for word in words:
         generate_wakewords(word)
         time.sleep(2)
+        break
     
     for word in words:
         try:

@@ -8,9 +8,12 @@ from pytorch_lightning.callbacks import ModelCheckpoint
 import torchmetrics
 from tqdm import tqdm
 import pandas as pd
+from Preprocessing import preprocess_audio_dataset, AudioMelDataset
+import numpy as np
 
-class SiameseNetwork(pl.LightningModule):
-    def __init__(self, embedding_dim=384, seq_length=1500, output_dim=768, learning_rate=0.001):
+# device = torch.device('cuda' if torch.cuda.is_available() else "cpu")
+class CRNN(pl.LightningModule):
+    def __init__(self, mel_bins=40, time_frames=100, num_classes=10, dropout=0.0, learning_rate=0.001):
         """
         Siamese Network for comparing audio embeddings using CNN-based feature extraction
         
@@ -20,69 +23,69 @@ class SiameseNetwork(pl.LightningModule):
             output_dim (int): Final embedding dimension
             learning_rate (float): Learning rate for optimizer
         """
-        super(SiameseNetwork, self).__init__()
+        super(CRNN, self).__init__()
         self.lr = learning_rate
-        self.output_dim = output_dim
+        self.num_classes = num_classes
+        self.mel_bins = mel_bins
         
-        # CNN-based feature extraction network
-        # Input shape: [batch_size, seq_length, 1, embedding_dim]
-        self.feature_extractor = nn.Sequential(
-            # Reduce sequence dimension in stages
-            nn.Conv2d(seq_length, seq_length // 3, kernel_size=1),
-            nn.BatchNorm2d(seq_length // 3),
-            nn.ReLU(),
-            
-            nn.Conv2d(seq_length // 3, seq_length // 10, kernel_size=1),
-            nn.BatchNorm2d(seq_length // 10),
-            nn.ReLU(),
-            
-            nn.Conv2d(seq_length // 10, 10, kernel_size=1),
-            nn.BatchNorm2d(10),
-            nn.ReLU(),
-        )
         
-        # Flattened dimension: 10 * 1 * embedding_dim
-        flat_dim = 10 * 1 * embedding_dim
         
-        # Final fully connected layers to get the desired output dimension
-        self.fc = nn.Sequential(
-            nn.Flatten(),
-            nn.Linear(flat_dim, output_dim),
-            nn.LayerNorm(output_dim),
-            nn.ReLU()
-        )
+        self.conv1 = nn.Conv2d(1, 16, (3,3))
+        self.bn1 = nn.BatchNorm2d(16)
+        self.relu = nn.ReLU()
+        self.pool1 = nn.MaxPool2d((2,2))
+        
+        self.conv2 = nn.Conv2d(16, 32, (3,3))
+        self.bn2 = nn.BatchNorm2d(32)
+        self.relu = nn.ReLU()
+        self.pool2 = nn.MaxPool2d((2,2))
+        
+        self.conv3 = nn.Conv2d(32, 64, (3,3))
+        self.bn3 = nn.BatchNorm2d(64)
+        self.relu = nn.ReLU()
+        self.pool3 = nn.MaxPool2d((1,2))
+        
+        # self.gru1 = nn.GRU(64*(mel_bins//8), 64, batch_first=True)
+        # self.gru2 = nn.GRU(64, 64, batch_first=True)
+        self.fc = nn.Linear(64*(self.mel_bins)*3, (64*(self.mel_bins)*3)//2)
+        self.linear_map = nn.Linear((64*(self.mel_bins)*3)//2, num_classes)
         
         # Loss function for training
-        self.contrastive_loss = ContrastiveLoss(margin=1.0)
+        self.loss = nn.CrossEntropyLoss()
         
-    def forward_one(self, x):
+    def forward(self, x):
         """
         Forward pass for one input
         
         Args:
             x: Input embedding of shape [batch_size, seq_length, 1, embedding_dim]
         """
-        x = self.feature_extractor(x)
+        B, _, _, _ = x.shape
+        x = self.conv1(x)
+        x = self.bn1(x)
+        x = self.relu(x)
+        x = self.pool1(x)
+        
+        x = self.conv2(x)
+        x = self.bn2(x)
+        x = self.relu(x)
+        x = self.pool2(x)
+        
+        x = self.conv3(x)
+        x = self.bn3(x)
+        x = self.relu(x)
+        x = self.pool3(x)
+        
+        # x = x.view(-1, 64*(self.mel_bins//8))
+        # print(x.shape)
+        x = x.view(B, 64*(self.mel_bins)*3)
+        # print(x.shape)
+        # x = self.gru1(x)
+        # x = self.gru2(x)
         x = self.fc(x)
-        # L2 normalize the output embeddings
-        x = F.normalize(x, p=2, dim=1)
+        x = self.linear_map(x)
+        
         return x
-    
-    def forward(self, input1, input2):
-        """
-        Forward pass for Siamese network
-        
-        Args:
-            input1: First audio embedding [batch_size, seq_length, 1, embedding_dim]
-            input2: Second audio embedding [batch_size, seq_length, 1, embedding_dim]
-        
-        Returns:
-            output1: Transformed embedding for first input
-            output2: Transformed embedding for second input
-        """
-        output1 = self.forward_one(input1)
-        output2 = self.forward_one(input2)
-        return output1, output2
 
     def training_step(self, batch, batch_idx):
         """
@@ -94,14 +97,14 @@ class SiameseNetwork(pl.LightningModule):
                   labels: 1 for similar pair, 0 for dissimilar pair
         """
         # print(batch)
-        audio1, audio2, labels = batch
+        audio, labels = batch
         
         
         # Forward pass
-        embeddings1, embeddings2 = self(audio1, audio2)
+        y_pred = self(audio)
         
         # Calculate loss
-        loss = self.contrastive_loss(embeddings1, embeddings2, labels)
+        loss = self.loss(y_pred, labels)
         
         # Log metrics
         self.log("train_loss", loss, prog_bar=True)
@@ -117,66 +120,39 @@ class SiameseNetwork(pl.LightningModule):
                   inputs: Tuple of (audio1, audio2)
                   labels: 1 for similar pair, 0 for dissimilar pair
         """
-        audio1, audio2, labels = batch
+        audio, labels = batch
         
         # Forward pass
-        embeddings1, embeddings2 = self(audio1, audio2)
+        y_preds = self(audio)
         
         # Calculate loss
-        loss = self.contrastive_loss(embeddings1, embeddings2, labels)
+        loss = self.loss(y_preds, labels)
         
-        # Calculate distance
-        distance = F.pairwise_distance(embeddings1, embeddings2)
+        # # Calculate distance
+        # distance = F.pairwise_distance(embeddings1, embeddings2)
         
-        # Calculate accuracy (simple threshold-based)
-        predictions = (distance < 0.5).float()
-        accuracy = (predictions == labels).float().mean()
+        # # Calculate accuracy (simple threshold-based)
+        # predictions = (distance < 0.5).float()
+        # accuracy = (predictions == labels).float().mean()
         
         # Log metrics
         self.log("val_loss", loss, prog_bar=True)
-        self.log("val_acc", accuracy, prog_bar=True)
+        # self.log("val_acc", accuracy, prog_bar=True)
         
         return loss
 
     def configure_optimizers(self):
         optimizer = optim.Adam(self.parameters(), lr=self.lr)
-        scheduler = optim.lr_scheduler.ReduceLROnPlateau(
-            optimizer, mode='min', factor=0.5, patience=5, verbose=True
-        )
+        # scheduler = optim.lr_scheduler.ReduceLROnPlateau(
+        #     optimizer, mode='min', factor=0.5, patience=5, verbose=True
+        # )
         return {
             "optimizer": optimizer,
-            "lr_scheduler": scheduler,
-            "monitor": "val_loss"
+            # "lr_scheduler": scheduler,
+            # "monitor": "val_loss"
         }
 
 
-class ContrastiveLoss(nn.Module):
-    """
-    Contrastive loss function for Siamese networks
-    """
-    def __init__(self, margin=1.0):
-        super(ContrastiveLoss, self).__init__()
-        self.margin = margin
-
-    def forward(self, output1, output2, label):
-        """
-        Args:
-            output1: First embedding
-            output2: Second embedding
-            label: 1 if embeddings should be similar, 0 if they should be dissimilar
-        """
-        # Calculate euclidean distance
-        euclidean_distance = F.pairwise_distance(output1, output2)
-        
-        # Contrastive loss
-        loss_contrastive = torch.mean(
-            label * torch.pow(euclidean_distance, 2) +
-            (1 - label) * torch.pow(torch.clamp(self.margin - euclidean_distance, min=0.0), 2)
-        )
-        
-        return loss_contrastive
-
-        
 
 # def load_data(filepath):
 #     df = pd.read_csv(filepath)
@@ -193,13 +169,20 @@ class ContrastiveLoss(nn.Module):
 
 # Create dummy dataset
 def create_data():
-    X1 = torch.randn((2, 1500, 1, 384))
-    X2 = torch.randn((2, 1500, 1, 384))
-    Y = torch.zeros((2,))
-    Y = Y.to(torch.float32)
-    # print(X[0])
-    # print(X.shape, Y.shape)
-    return TensorDataset(X1, X2, Y)
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    # X, y, label_encoder, max_length, max_duration = preprocess_audio_dataset(
+    #     audio_dir="Audio_dataset", 
+    #     cache_dir="./dataset_cache"
+    # )
+    # X = np.expand_dims(X, 1)
+    X = torch.load("./dataset_cache/X.pt", weights_only=True)
+    X = X.unsqueeze(1)
+    y = torch.load("./dataset_cache/y.pt", weights_only=True)
+    print("Shapes: ",X.shape, y.shape)
+    # Create dataset and dataloader
+    # dataset = AudioMelDataset(X, y)
+    # return dataset
+    return TensorDataset(X, y)
 
 
 # Load data into DataLoaders
@@ -208,7 +191,13 @@ def get_dataloaders(batch_size=32):
     train_size = int(0.8 * len(dataset))
     val_size = len(dataset) - train_size
     # print(train_size, val_size)
-    train_dataset, val_dataset = torch.utils.data.random_split(dataset, [train_size, val_size])
+    # Create a generator that matches your device
+    generator = torch.Generator()
+    train_dataset, val_dataset = torch.utils.data.random_split(
+        dataset, [train_size, val_size], generator=generator
+    )
+    
+    # train_dataset, val_dataset = torch.utils.data.random_split(dataset, [train_size, val_size])
     
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
@@ -219,7 +208,7 @@ def get_dataloaders(batch_size=32):
 # Initialize and train model
 def train_model():
     # input_size, hidden_size, output_size = 256, 512, 2
-    model = SiameseNetwork()
+    model = CRNN(num_classes=74)
 
     train_loader, val_loader = get_dataloaders()
 
@@ -227,9 +216,15 @@ def train_model():
         monitor="val_loss", mode="min", save_top_k=1, filename="2epochmodel"
     )
 
-    trainer = pl.Trainer(max_epochs=2, accelerator="gpu" if torch.cuda.is_available() else "cpu",
-                         callbacks=[checkpoint_callback],
-                        enable_progress_bar=True  # Disable default tqdm ba
+    # trainer = pl.Trainer(max_epochs=2, accelerator="gpu" if torch.cuda.is_available() else "cpu",
+    #                      callbacks=[checkpoint_callback],
+    #                     enable_progress_bar=True,  # Disable default tqdm ba
+    #                     )
+    
+    trainer = pl.Trainer(max_epochs=10,
+                        enable_progress_bar=True,  # Disable default tqdm ba
+                        num_nodes=1,
+                        enable_checkpointing=True
                         )
     
     trainer.fit(model, train_loader, val_loader)
@@ -237,7 +232,10 @@ def train_model():
 
 if __name__ == "__main__":
     model = train_model()
-    # model = SiameseNetwork()
+    # model = CRNN()
+    # x = torch.randn((2, 1, 176, 40))
+    # out = model(x)
+    # print(out)
     # inp = torch.randn((2, 1500, 1, 384))
     # out = model(inp, inp)
     # print(out[0].shape)
