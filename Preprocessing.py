@@ -190,6 +190,70 @@ def load_and_preprocess_audio_file(audio_path, sample_rate=16000, n_mels=40, n_f
     
     return mel_spec
 
+def load_and_preprocess_audio(waveform, sr, sample_rate=16000, n_mels=40, n_fft=1024, hop_length=512, max_duration=None, add_batch_dim=False):
+    """
+    Load and preprocess a single audio file for training or inference using PyTorch and torchaudio.
+    Using the same function for both training and inference ensures consistency.
+    """
+    # Load audio file
+    # waveform, sr = torchaudio.load(audio_path)
+    waveform = torch.tensor(waveform)
+    # Convert to mono if needed
+    # print(waveform.shape, waveform.shape[0])
+    if waveform.shape[0] > 1:
+        waveform = torch.mean(waveform, dim=0, keepdim=True)
+        # print(waveform.shape, waveform.shape[0])
+    # Squeeze extra dimension for processing
+    # waveform = waveform.squeeze(0)
+    
+    # Resample if needed
+    if sr != sample_rate:
+        resampler = torchaudio.transforms.Resample(sr, sample_rate)
+        waveform = resampler(waveform)
+    
+    # Trim or pad if max_duration is specified
+    if max_duration is not None:
+        max_samples = int(max_duration * sample_rate)
+        # print(waveform.shape, waveform.shape[0])
+        if waveform.shape[0] < max_samples:
+            # Pad with zeros
+            padding = max_samples - waveform.shape[0]
+            waveform = F.pad(waveform, (0, padding))
+        else:
+            # Trim
+            waveform = waveform[:max_samples]
+    
+    # Create mel spectrogram transform
+    mel_spectrogram = torchaudio.transforms.MelSpectrogram(
+        sample_rate=sample_rate,
+        n_fft=n_fft,
+        hop_length=hop_length,
+        n_mels=n_mels,
+        power=2.0
+    )
+    
+    # Extract mel spectrogram
+    mel_spec = mel_spectrogram(waveform)
+    
+    # Convert to log scale (dB)
+    mel_spec = torchaudio.transforms.AmplitudeToDB()(mel_spec)
+    
+    # Convert to numpy for consistency with the original function
+    mel_spec = mel_spec.numpy()
+    
+    # Normalize
+    mel_spec = (mel_spec - mel_spec.mean()) / (mel_spec.std() + 1e-8)
+    
+    # Transpose to have time as first dimension
+    mel_spec = mel_spec.T
+    
+    # Add batch dimension if requested (for inference)
+    if add_batch_dim:
+        mel_spec = np.expand_dims(mel_spec, axis=0)
+    
+    return mel_spec
+
+
 # Example usage for PyTorch dataset creation
 class AudioMelDataset(torch.utils.data.Dataset):
     def __init__(self, X, y):

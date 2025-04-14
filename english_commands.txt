@@ -1,30 +1,7 @@
-Turn on the lights
-Turn off the lights
-Dim the lights
-Brighten the lights
-Set the lights to 50%
-Change light color to blue
-Open the door
-Close the door
-Lock the door
-Unlock the door
-Is the door open
-Play music
-Pause the music
-Next song
-Previous song
-Stop the music
-Increase the volume
-Mute the TV
-Turn on the TV
-What's the time?
-Set an alarm for 7 AM
-Set a reminder
-What's on my schedule
-What's the weather
-Will it rain today
-What’s the temperature
-Hey assistant
-Hello
-Can you hear me?
-Are you there?
+How is the stock market
+Translate hello to French
+Tell me a fun fact
+How do you say cat in Spanish
+How do you pronounce quinoa?
+Spell the word elephant
+Count from one to ten

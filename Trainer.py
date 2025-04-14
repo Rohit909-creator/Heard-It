@@ -208,7 +208,7 @@ def get_dataloaders(batch_size=32):
 # Initialize and train model
 def train_model():
     # input_size, hidden_size, output_size = 256, 512, 2
-    model = CRNN(num_classes=74)
+    model = CRNN(num_classes=143)
 
     train_loader, val_loader = get_dataloaders()
 
@@ -221,7 +221,7 @@ def train_model():
     #                     enable_progress_bar=True,  # Disable default tqdm ba
     #                     )
     
-    trainer = pl.Trainer(max_epochs=10,
+    trainer = pl.Trainer(max_epochs=20,
                         enable_progress_bar=True,  # Disable default tqdm ba
                         num_nodes=1,
                         enable_checkpointing=True

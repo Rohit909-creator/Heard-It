@@ -21,7 +21,7 @@ def generate_wakewords(wakeword: str):
     ]
     
     # Languages to try
-    languages = ["hi"]
+    languages = ["en"]
     
     # Headers
     headers = {
@@ -29,8 +29,10 @@ def generate_wakewords(wakeword: str):
         "X-API-Key": os.getenv("API_KEY"),  # Replace with your actual API key
         "Content-Type": "application/json"
     }
-    
+    count = 0
     for voice_id in voice_ids:
+        count+=1
+        print(count)
         for language in languages:
             # Prepare the request payload based on your example
             payload = {
@@ -58,8 +60,8 @@ def generate_wakewords(wakeword: str):
                 # Check if the request was successful
                 if response.status_code == 200:
                     # Define output filename
-                    output_filename = f"{wakeword}_{voice_id}_{language}.wav"
-                    
+                    output_filename = f"./Audio_dataset/{wakeword}/{wakeword}_{voice_id}_{language}.wav"
+                    # output_filename = "test2.wav"
                     # Save the audio bytes to a file
                     with open(output_filename, 'wb') as f:
                         f.write(response.content)
@@ -79,19 +81,118 @@ def generate_wakewords(wakeword: str):
 
 if __name__ == "__main__":
     
-    with open("hindi_commands.txt", 'r') as f:
+    with open("english_commands.txt", 'r') as f:
         s = f.read()
     words = s.split('\n')
-    print(words)
-    # words = ["Hello"]
-    for word in words:
-        generate_wakewords(word)
-        time.sleep(2)
-        break
-    
     for word in words:
         try:
             os.makedirs(f"./Audio_dataset/{word}", exist_ok=True)
         except Exception as e:
             print("Exception:", e)
+    # print(words)
+    # words = ["So, for so long, we have been depending on wakeword activated robots and assistants. When we presented Aira, our AI robot in Keraleeyam Fest, the audience didn't interact with it by saying the wakeword Aira, they just talked natural by asking questions to it and all. Thus Wakeword is unnatural. And its time that we changed that. Introducing SpeakSense, our first generation AI framework which replaces the Wakeword Technology."]
+    for word in words:
+        generate_wakewords(word)
+        time.sleep(2)
+    
+    # for word in words:
+    #     try:
+    #         os.makedirs(f"./Audio_dataset/{word}", exist_ok=True)
+    #     except Exception as e:
+    #         print("Exception:", e)
             
+            
+# Turn on the lights
+# Turn off the lights
+# Dim the lights
+# Brighten the lights
+# Set the lights to 50%
+# Change light color to blue
+# Open the door
+# Close the door
+# Lock the door
+# Unlock the door
+# Is the door open
+# Play music
+# Pause the music
+# Next song
+# Previous song
+# Stop the music
+# Increase the volume
+# Mute the TV
+# Turn on the TV
+# What's the time?
+# Set an alarm for 7 AM
+# Set a reminder
+# What's on my schedule
+# What's the weather
+# Will it rain today
+# What’s the temperature
+# Hey assistant
+# Hello
+# Can you hear me?
+# Are you there?
+# Increase fan speed
+# Decrease fan speed
+# What's the weather today
+# Will it rain today
+# What's the temperature outside
+# How is the traffic
+# Set an alarm for 7 AM
+# Set a timer for 10 minutes
+# Cancel the timer
+# Remind me to drink water
+# Add milk to my shopping list
+# Remove eggs from my shopping list
+# What’s on my calendar
+# Add a meeting at 3 PM
+# Call John
+# Send a message to mom
+# Read my notifications
+# What time is it
+# Tell me a joke
+# What's the news today
+# Start the vacuum
+# Stop the vacuum
+# Find my phone
+# Where is my phone
+# Switch on the heater
+# Switch off the heater
+# Start the coffee machine
+# Stop the coffee machine
+# What’s the battery level
+# Turn on Bluetooth
+# Turn off Bluetooth
+# Enable Wi-Fi
+# Disable Wi-Fi
+# Connect to home network
+# Disconnect from Wi-Fi
+# Open the camera
+# Take a selfie
+# Record a video
+# Stop recording
+# Show me my gallery
+# Open my photos
+# Start a video call
+# End the call
+# Switch on airplane mode
+# Turn off airplane mode
+# What’s my location?
+# Navigate to work
+# How far is the airport
+# Find the nearest restaurant
+# Order pizza
+# Order groceries
+# Book a cab
+# Schedule a ride for 8 PM
+# Track my order
+# Cancel my order
+# Restart the device
+# Shutdown the device
+# Take a screenshot
+# Open settings
+# Enable dark mode
+# Disable dark mode
+# Open WhatsApp
+# Send a voice message
+# What's trending on Twitter
