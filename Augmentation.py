@@ -1,398 +1,533 @@
-import numpy as np
-import librosa
-import pyroomacoustics as pra
-import soundfile as sf
-import os
-from scipy import signal
+import torch
+import torchaudio
+import torchaudio.transforms as T
+import torchaudio.functional as F
 import random
+import numpy as np
+from typing import Optional, List, Tuple, Union
+import math
+import os
+from tqdm import tqdm
 
-
-class AudioAugmenter:
-    """
-    A class for applying various audio augmentation techniques to audio samples
-    for improving speech recognition model performance.
-    """
+class AudioAugmentor:
+    """A class containing various audio augmentation methods using torchaudio, compatible with Windows."""
     
-    def __init__(self, sample_rate=16000, seed=None):
+    def __init__(self, sample_rate: int = 16000):
         """
-        Initialize the AudioAugmenter.
+        Initialize the AudioAugmentor.
         
         Args:
-            sample_rate (int): Sample rate of the audio files
-            seed (int, optional): Random seed for reproducibility
+            sample_rate: The sample rate of the audio files (Hz)
         """
         self.sample_rate = sample_rate
-        if seed is not None:
-            np.random.seed(seed)
-            random.seed(seed)
         
-    def load_audio(self, file_path):
-        """Load audio file using librosa."""
-        audio, _ = librosa.load(file_path, sr=self.sample_rate, mono=True)
-        return audio
-    
-    def save_audio(self, audio, file_path):
-        """Save audio to file."""
-        sf.write(file_path, audio, self.sample_rate)
-    
-    def time_stretch(self, audio, rate_range=(0.8, 1.2)):
+    def time_stretch(self, 
+                    waveform: torch.Tensor, 
+                    stretch_factor_range: Tuple[float, float] = (0.8, 1.2)) -> torch.Tensor:
         """
-        Stretch or compress the audio in time without changing pitch.
+        Apply time stretching to an audio waveform.
         
         Args:
-            audio (np.ndarray): Input audio signal
-            rate_range (tuple): Range of stretching factors (below 1: stretch, above 1: compress)
-            
+            waveform: Audio tensor [channels, time]
+            stretch_factor_range: Range for random stretch factor (min, max)
+                                  Values < 1 speed up, values > 1 slow down
+        
         Returns:
-            np.ndarray: Time-stretched audio
+            Time-stretched audio tensor
         """
-        rate = np.random.uniform(*rate_range)
-        return librosa.effects.time_stretch(audio, rate=rate)
-    
-    def pitch_shift(self, audio, semitone_range=(-4, 4)):
-        """
-        Shift the pitch of the audio.
+        stretch_factor = random.uniform(*stretch_factor_range)
         
-        Args:
-            audio (np.ndarray): Input audio signal
-            semitone_range (tuple): Range of semitones to shift pitch by
+        if stretch_factor == 1.0:
+            return waveform
             
-        Returns:
-            np.ndarray: Pitch-shifted audio
-        """
-        n_steps = np.random.uniform(*semitone_range)
-        return librosa.effects.pitch_shift(audio, sr=self.sample_rate, n_steps=n_steps)
-    
-    def add_background_noise(self, audio, noise_file, snr_range=(5, 20)):
-        """
-        Add background noise to the audio at a specified signal-to-noise ratio.
+        # Using torchaudio's phase vocoder for time stretching
+        # Convert to spectrogram
+        n_fft = 1024
+        hop_length = 256
         
-        Args:
-            audio (np.ndarray): Input audio signal
-            noise_file (str): Path to the noise audio file
-            snr_range (tuple): Range of signal-to-noise ratios in dB
-            
-        Returns:
-            np.ndarray: Noisy audio
-        """
-        # Load noise and ensure it's the same length as the audio
-        noise = self.load_audio(noise_file)
-        
-        # Loop the noise if it's shorter than the audio
-        if len(noise) < len(audio):
-            noise = np.tile(noise, int(np.ceil(len(audio) / len(noise))))
-        
-        # Trim or pad noise to match audio length
-        noise = noise[:len(audio)] if len(noise) >= len(audio) else np.pad(noise, (0, len(audio) - len(noise)))
-        
-        # Calculate audio and noise power
-        audio_power = np.mean(audio ** 2)
-        noise_power = np.mean(noise ** 2)
-        
-        # Set the SNR
-        snr = np.random.uniform(*snr_range)
-        noise_scale = np.sqrt(audio_power / (noise_power * 10 ** (snr / 10)))
-        
-        # Mix audio and noise
-        noisy_audio = audio + noise_scale * noise
-        
-        # Normalize to prevent clipping
-        max_val = np.max(np.abs(noisy_audio))
-        if max_val > 1.0:
-            noisy_audio = noisy_audio / max_val
-            
-        return noisy_audio
-    
-    def mix_random_noise_from_directory(self, audio, noise_dir, snr_range=(5, 20), prob=0.7):
-        """
-        Add a randomly selected background noise from a directory.
-        
-        Args:
-            audio (np.ndarray): Input audio signal
-            noise_dir (str): Directory containing noise audio files
-            snr_range (tuple): Range of signal-to-noise ratios in dB
-            prob (float): Probability of adding noise
-            
-        Returns:
-            np.ndarray: Audio with or without noise
-        """
-        if np.random.random() > prob:
-            return audio
-            
-        noise_files = [os.path.join(noise_dir, f) for f in os.listdir(noise_dir) 
-                      if f.endswith(('.wav', '.mp3', '.flac'))]
-        
-        if not noise_files:
-            return audio
-            
-        selected_noise = random.choice(noise_files)
-        return self.add_background_noise(audio, selected_noise, snr_range)
-    
-    def apply_room_simulation(self, audio, room_dim_range=(3, 10), rt60_range=(0.2, 0.8)):
-        """
-        Apply room simulation effects (reverb/echo) to audio.
-        
-        Args:
-            audio (np.ndarray): Input audio signal
-            room_dim_range (tuple): Range for room dimensions in meters
-            rt60_range (tuple): Range for reverberation time in seconds
-            
-        Returns:
-            np.ndarray: Audio with room effects
-        """
-        # Create a random room
-        x_dim = np.random.uniform(*room_dim_range)
-        y_dim = np.random.uniform(*room_dim_range)
-        z_dim = np.random.uniform(2.5, 4)
-        
-        # Set reverberation time
-        rt60 = np.random.uniform(*rt60_range)
-        
-        # Create room with specified dimensions and RT60
-        room = pra.ShoeBox(
-            [x_dim, y_dim, z_dim],
-            fs=self.sample_rate,
-            materials=pra.Material(energy_absorption=0.2),
-            max_order=17,
+        spec_transform = T.Spectrogram(
+            n_fft=n_fft,
+            hop_length=hop_length,
+            power=None  # Return complex spectrogram
         )
         
-        # Adjust the materials to achieve the desired RT60
-        room.set_rt60(rt60)
+        spec = spec_transform(waveform)
         
-        # Add a source somewhere in the room
-        source_pos = [np.random.uniform(0.5, x_dim-0.5), 
-                      np.random.uniform(0.5, y_dim-0.5), 
-                      np.random.uniform(1.0, 1.8)]
-        room.add_source(source_pos, signal=audio)
+        # Apply time stretch on complex spectrogram
+        stretched_spec = F.phase_vocoder(
+            spec, 
+            stretch_factor,
+            hop_length
+        )
         
-        # Add a microphone
-        mic_pos = [np.random.uniform(0.5, x_dim-0.5), 
-                   np.random.uniform(0.5, y_dim-0.5), 
-                   np.random.uniform(1.0, 1.8)]
-        room.add_microphone(mic_pos)
+        # Convert back to waveform
+        griffin_lim = T.GriffinLim(
+            n_fft=n_fft,
+            hop_length=hop_length,
+            power=1.0,
+            n_iter=32
+        )
         
-        # Compute the room impulse response
-        room.compute_rir()
+        stretched_waveform = griffin_lim(torch.abs(stretched_spec))
         
-        # Simulate room
-        room.simulate()
+        # Make sure the output is the same type as input
+        stretched_waveform = stretched_waveform.type_as(waveform)
         
-        # Get the audio from the microphone
-        reverb_audio = room.mic_array.signals[0, :]
-        
-        # Normalize output
-        reverb_audio = reverb_audio / np.max(np.abs(reverb_audio)) * np.max(np.abs(audio))
-        
-        # Trim to original length if needed
-        if len(reverb_audio) > len(audio):
-            reverb_audio = reverb_audio[:len(audio)]
-        else:
-            reverb_audio = np.pad(reverb_audio, (0, len(audio) - len(reverb_audio)))
-            
-        return reverb_audio
+        return stretched_waveform
     
-    def change_volume(self, audio, gain_range=(0.5, 1.5)):
+    def pitch_shift(self, 
+                   waveform: torch.Tensor, 
+                   shift_range: Tuple[float, float] = (-3.0, 3.0)) -> torch.Tensor:
         """
-        Apply random volume change to audio.
+        Apply pitch shifting to an audio waveform without using SoX.
+        This is a Windows-compatible implementation using resampling approach.
         
         Args:
-            audio (np.ndarray): Input audio signal
-            gain_range (tuple): Range of gain factors to apply
-            
+            waveform: Audio tensor [channels, time]
+            shift_range: Range of semitones to shift the pitch by (min, max)
+        
         Returns:
-            np.ndarray: Volume-adjusted audio
+            Pitch-shifted audio tensor
         """
-        gain = np.random.uniform(*gain_range)
-        audio_modified = audio * gain
+        # Choose random pitch shift in semitones
+        n_steps = random.uniform(*shift_range)
         
-        # Clip to prevent distortion
-        audio_modified = np.clip(audio_modified, -1.0, 1.0)
+        if n_steps == 0:
+            return waveform
+            
+        # Calculate pitch shift factor: 2^(n_steps/12)
+        pitch_factor = 2 ** (n_steps / 12)
         
-        return audio_modified
+        # Step 1: Resample to change pitch and tempo together
+        orig_freq = self.sample_rate
+        new_freq = int(orig_freq * pitch_factor)
+        
+        resampler_down = T.Resample(orig_freq=orig_freq, new_freq=new_freq)
+        resampled = resampler_down(waveform)
+        
+        # Step 2: Apply time stretching to restore original tempo
+        # This effectively changes only the pitch
+        time_stretch_factor = 1.0 / pitch_factor
+        
+        n_fft = 1024
+        hop_length = 256
+        
+        # Convert to spectrogram
+        spec_transform = T.Spectrogram(
+            n_fft=n_fft, 
+            hop_length=hop_length,
+            power=None
+        )
+        spec = spec_transform(resampled)
+        
+        # Time stretch to compensate tempo change
+        stretched_spec = F.phase_vocoder(
+            spec,
+            time_stretch_factor,
+            hop_length
+        )
+        
+        # Convert back to waveform
+        griffin_lim = T.GriffinLim(
+            n_fft=n_fft,
+            hop_length=hop_length,
+            power=1.0,
+            n_iter=32
+        )
+        
+        pitched_waveform = griffin_lim(torch.abs(stretched_spec))
+        
+        # Resample back to original sample rate
+        resampler_up = T.Resample(orig_freq=new_freq, new_freq=orig_freq)
+        pitched_waveform = resampler_up(pitched_waveform)
+        
+        # Ensure output length matches input
+        if pitched_waveform.shape[1] > waveform.shape[1]:
+            pitched_waveform = pitched_waveform[:, :waveform.shape[1]]
+        elif pitched_waveform.shape[1] < waveform.shape[1]:
+            padding = waveform.shape[1] - pitched_waveform.shape[1]
+            pitched_waveform = torch.nn.functional.pad(pitched_waveform, (0, padding))
+        
+        return pitched_waveform
     
-    def add_random_frequency_filtering(self, audio, filter_types=None):
+    def add_background_noise(self, 
+                            waveform: torch.Tensor, 
+                            noise_waveform: torch.Tensor, 
+                            snr_range: Tuple[float, float] = (5.0, 20.0)) -> torch.Tensor:
         """
-        Apply random frequency filtering to simulate different device characteristics.
+        Add background noise to an audio waveform at a specified SNR.
         
         Args:
-            audio (np.ndarray): Input audio signal
-            filter_types (list, optional): List of filter types to choose from
-            
+            waveform: Audio tensor [channels, time]
+            noise_waveform: Noise tensor [channels, time]
+            snr_range: Signal-to-noise ratio range in dB (min, max)
+        
         Returns:
-            np.ndarray: Filtered audio
+            Noisy audio tensor
         """
-        if filter_types is None:
-            filter_types = ['lowpass', 'highpass', 'bandpass']
-            
-        filter_type = random.choice(filter_types)
-        nyquist = self.sample_rate // 2
+        # Choose random SNR from range
+        snr_db = random.uniform(*snr_range)
         
-        if filter_type == 'lowpass':
-            # Random cutoff between 1kHz and Nyquist
-            cutoff = np.random.uniform(1000, nyquist)
-            b, a = signal.butter(4, cutoff / nyquist, btype='low')
-            
-        elif filter_type == 'highpass':
-            # Random cutoff between 80Hz and 1kHz
-            cutoff = np.random.uniform(80, 1000)
-            b, a = signal.butter(4, cutoff / nyquist, btype='high')
-            
-        elif filter_type == 'bandpass':
-            # Random bandwidth between 500Hz and 3kHz
-            low_cutoff = np.random.uniform(200, 2000)
-            high_cutoff = low_cutoff + np.random.uniform(500, 3000)
-            high_cutoff = min(high_cutoff, nyquist - 100)  # Ensure it's below Nyquist
-            b, a = signal.butter(2, [low_cutoff / nyquist, high_cutoff / nyquist], btype='band')
-            
-        # Apply the filter
-        filtered_audio = signal.lfilter(b, a, audio)
+        # Calculate signal and noise power
+        signal_power = torch.mean(waveform ** 2)
+        noise_power = torch.mean(noise_waveform ** 2)
         
-        return filtered_audio
+        # If noise is too short, repeat it
+        if noise_waveform.shape[1] < waveform.shape[1]:
+            num_repeats = int(np.ceil(waveform.shape[1] / noise_waveform.shape[1]))
+            noise_waveform = noise_waveform.repeat(1, num_repeats)
+        
+        # Trim noise to match signal length
+        noise_waveform = noise_waveform[:, :waveform.shape[1]]
+        
+        # Calculate scaling factor for noise based on SNR
+        alpha = torch.sqrt(signal_power / (noise_power * (10 ** (snr_db / 10))))
+        
+        # Scale noise and add to signal
+        scaled_noise = noise_waveform * alpha
+        noisy_waveform = waveform + scaled_noise
+        
+        # Normalize to prevent clipping
+        max_val = torch.max(torch.abs(noisy_waveform))
+        if max_val > 1.0:
+            noisy_waveform = noisy_waveform / max_val
+        
+        return noisy_waveform
     
-    def time_shift(self, audio, shift_range=(-0.1, 0.1)):
+    def add_room_simulation(self, 
+                           waveform: torch.Tensor, 
+                           rt60_range: Tuple[float, float] = (0.1, 1.0)) -> torch.Tensor:
         """
-        Shift audio in time by a random amount.
+        Simulate room acoustics with reverb effect.
         
         Args:
-            audio (np.ndarray): Input audio signal
-            shift_range (tuple): Range of shift amount as a fraction of total length
-            
-        Returns:
-            np.ndarray: Time-shifted audio
-        """
-        shift_factor = np.random.uniform(*shift_range)
-        shift_samples = int(len(audio) * shift_factor)
+            waveform: Audio tensor [channels, time]
+            rt60_range: Reverberation time range in seconds (min, max)
         
+        Returns:
+            Reverberant audio tensor
+        """
+        # Choose random RT60 from range
+        rt60 = random.uniform(*rt60_range)
+        
+        # Simple convolution-based reverb simulation using exponential decay
+        n_samples = waveform.shape[1]
+        decay_length = int(rt60 * self.sample_rate)
+        
+        # Create exponential decay filter
+        decay = torch.exp(torch.linspace(0, -8, decay_length)).unsqueeze(0)
+        
+        # Apply reverb through convolution
+        reverb_waveform = F.convolve(waveform, decay.to(waveform.device))
+        
+        # Normalize and trim to original length
+        reverb_waveform = reverb_waveform[:, :n_samples]
+        max_val = torch.max(torch.abs(reverb_waveform))
+        if max_val > 1.0:
+            reverb_waveform = reverb_waveform / max_val
+        
+        # Mix original and reverberant signals
+        mix_ratio = random.uniform(0.5, 0.9)
+        result = mix_ratio * waveform + (1 - mix_ratio) * reverb_waveform
+        
+        return result
+    
+    def adjust_volume(self, 
+                     waveform: torch.Tensor, 
+                     gain_range: Tuple[float, float] = (-10.0, 3.0)) -> torch.Tensor:
+        """
+        Adjust the volume of an audio waveform.
+        
+        Args:
+            waveform: Audio tensor [channels, time]
+            gain_range: Gain adjustment range in dB (min, max)
+        
+        Returns:
+            Volume-adjusted audio tensor
+        """
+        gain_db = random.uniform(*gain_range)
+        gain_factor = 10 ** (gain_db / 20.0)  # Convert dB to amplitude factor
+        
+        return waveform * gain_factor
+    
+    def time_shift(self, 
+                  waveform: torch.Tensor, 
+                  shift_range: Tuple[float, float] = (-0.2, 0.2)) -> torch.Tensor:
+        """
+        Apply random time shifting to an audio waveform.
+        
+        Args:
+            waveform: Audio tensor [channels, time]
+            shift_range: Shift range as fraction of total length (min, max)
+        
+        Returns:
+            Time-shifted audio tensor
+        """
+        n_samples = waveform.shape[1]
+        shift_factor = random.uniform(*shift_range)
+        shift_samples = int(shift_factor * n_samples)
+        
+        shifted_waveform = torch.roll(waveform, shifts=shift_samples, dims=1)
+        
+        # Zero out the rolled part for clean shifting
         if shift_samples > 0:
-            # Shift right (introduce silence at beginning)
-            shifted_audio = np.concatenate([np.zeros(shift_samples), audio[:-shift_samples]])
-        else:
-            # Shift left (introduce silence at end)
-            shift_samples = abs(shift_samples)
-            shifted_audio = np.concatenate([audio[shift_samples:], np.zeros(shift_samples)])
+            shifted_waveform[:, :shift_samples] = 0
+        elif shift_samples < 0:
+            shifted_waveform[:, shift_samples:] = 0
             
-        return shifted_audio
+        return shifted_waveform
     
-    def apply_random_augmentations(self, audio, noise_dir=None, prob_dict=None):
+    def spec_augment(self, waveform: torch.Tensor) -> torch.Tensor:
         """
-        Apply multiple random augmentations with specified probabilities.
+        Apply SpecAugment-style augmentation with more robust implementation.
         
         Args:
-            audio (np.ndarray): Input audio signal
-            noise_dir (str, optional): Directory containing noise files
-            prob_dict (dict, optional): Dictionary of augmentation probabilities
+            waveform: Audio tensor [channels, time]
             
         Returns:
-            np.ndarray: Augmented audio
+            Augmented audio tensor
         """
-        # Default probabilities if not provided
-        if prob_dict is None:
-            prob_dict = {
-                'time_stretch': 0.5,
-                'pitch_shift': 0.5,
-                'add_noise': 0.5 if noise_dir else 0,
-                'room_simulation': 0.3,
-                'volume_change': 0.7,
-                'frequency_filter': 0.3,
-                'time_shift': 0.5
-            }
+        # We'll use a simpler approach - apply freq and time masking directly to the spectrogram
+        # then convert back, without the problematic InverseMelScale transform
         
-        augmented_audio = audio.copy()
+        # First convert to spectrogram
+        n_fft = 512
+        hop_length = 128
         
-        # Apply each augmentation based on probability
-        if np.random.random() < prob_dict.get('time_stretch', 0):
-            augmented_audio = self.time_stretch(augmented_audio)
-            
-        if np.random.random() < prob_dict.get('pitch_shift', 0):
-            augmented_audio = self.pitch_shift(augmented_audio)
-            
-        if noise_dir and np.random.random() < prob_dict.get('add_noise', 0):
-            augmented_audio = self.mix_random_noise_from_directory(
-                augmented_audio, noise_dir, prob=1.0)  # prob=1.0 because we already checked
-            
-        if np.random.random() < prob_dict.get('room_simulation', 0):
-            augmented_audio = self.apply_room_simulation(augmented_audio)
-            
-        if np.random.random() < prob_dict.get('volume_change', 0):
-            augmented_audio = self.change_volume(augmented_audio)
-            
-        if np.random.random() < prob_dict.get('frequency_filter', 0):
-            augmented_audio = self.add_random_frequency_filtering(augmented_audio)
-            
-        if np.random.random() < prob_dict.get('time_shift', 0):
-            augmented_audio = self.time_shift(augmented_audio)
-            
-        return augmented_audio
+        # Create spectrogram
+        spec_transform = T.Spectrogram(
+            n_fft=n_fft,
+            hop_length=hop_length,
+            power=2.0  # Power spectrogram
+        )
+        
+        # Apply spectrogram transform
+        spec = spec_transform(waveform)
+        
+        # Apply time and frequency masking directly to linear spectrogram
+        time_masking = T.TimeMasking(time_mask_param=20)
+        freq_masking = T.FrequencyMasking(freq_mask_param=15)
+        
+        # Apply masking
+        masked_spec = time_masking(spec)
+        masked_spec = freq_masking(masked_spec)
+        
+        # Convert back to waveform
+        griffin_lim = T.GriffinLim(
+            n_fft=n_fft,
+            hop_length=hop_length,
+            power=2.0,
+            n_iter=32
+        )
+        
+        augmented_waveform = griffin_lim(masked_spec)
+        
+        # Make sure the output is the same type and shape as input
+        if augmented_waveform.shape[1] != waveform.shape[1]:
+            # Pad or trim to match original length
+            if augmented_waveform.shape[1] < waveform.shape[1]:
+                pad_size = waveform.shape[1] - augmented_waveform.shape[1]
+                augmented_waveform = torch.nn.functional.pad(augmented_waveform, (0, pad_size))
+            else:
+                augmented_waveform = augmented_waveform[:, :waveform.shape[1]]
+        
+        # Ensure we have the same number of channels
+        if augmented_waveform.shape[0] != waveform.shape[0]:
+            if augmented_waveform.shape[0] == 1 and waveform.shape[0] > 1:
+                augmented_waveform = augmented_waveform.repeat(waveform.shape[0], 1)
+        
+        return augmented_waveform
+        
+    def combine_augmentations(self, 
+                            waveform: torch.Tensor,
+                            noise_files: Optional[List[str]] = None,
+                            num_augmentations: int = 2) -> torch.Tensor:
+        """Apply multiple random augmentations to an audio sample."""
+        available_augmentations = [
+            self.time_stretch,
+            self.pitch_shift,
+            self.time_shift,
+            self.adjust_volume,
+            self.add_room_simulation,
+            self.spec_augment
+        ]
+        
+        # Add noise augmentation if noise files provided
+        if noise_files and len(noise_files) > 0:
+            noise_aug = lambda x: self._get_noise_augmentation(x, noise_files)
+            available_augmentations.append(noise_aug)
+        
+        # Select random augmentations
+        selected_augmentations = random.sample(
+            available_augmentations, 
+            min(num_augmentations, len(available_augmentations))
+        )
+        
+        # Apply selected augmentations sequentially with error handling
+        augmented_waveform = waveform
+        for augment_fn in selected_augmentations:
+            try:
+                augmented_waveform = augment_fn(augmented_waveform)
+            except Exception as e:
+                print(f"Warning: Augmentation function {augment_fn.__name__} failed: {str(e)}")
+                # Continue with the original waveform if an augmentation fails
+                continue
+                
+        return augmented_waveform
     
-    def generate_augmented_dataset(self, input_dir, output_dir, noise_dir=None, 
-                                  augmentations_per_file=5, prob_dict=None):
-        """
-        Generate an augmented dataset from original audio files.
+    def _get_noise_augmentation(self, waveform: torch.Tensor, noise_files: List[str]) -> torch.Tensor:
+        """Helper method to apply noise augmentation using a random noise file."""
+        # Select random noise file
+        noise_file = random.choice(noise_files)
         
-        Args:
-            input_dir (str): Directory containing original audio files
-            output_dir (str): Directory to save augmented files
-            noise_dir (str, optional): Directory containing noise files
-            augmentations_per_file (int): Number of augmented versions per original file
-            prob_dict (dict, optional): Dictionary of augmentation probabilities
-            
-        Returns:
-            list: Paths to all generated files
-        """
-        os.makedirs(output_dir, exist_ok=True)
+        # Load noise waveform
+        noise_waveform, _ = torchaudio.load(noise_file)
         
-        audio_files = [os.path.join(input_dir, f) for f in os.listdir(input_dir) 
-                      if f.endswith(('.wav', '.mp3', '.flac'))]
+        # Match channels with input
+        if noise_waveform.shape[0] != waveform.shape[0]:
+            if noise_waveform.shape[0] == 1 and waveform.shape[0] == 2:
+                noise_waveform = noise_waveform.repeat(2, 1)
+            elif noise_waveform.shape[0] == 2 and waveform.shape[0] == 1:
+                noise_waveform = torch.mean(noise_waveform, dim=0, keepdim=True)
         
-        generated_files = []
-        
-        for audio_file in audio_files:
-            filename = os.path.basename(audio_file)
-            base_name, ext = os.path.splitext(filename)
-            
-            # Load original audio
-            audio = self.load_audio(audio_file)
-            
-            # Save original copy if needed
-            # original_output = os.path.join(output_dir, filename)
-            # self.save_audio(audio, original_output)
-            # generated_files.append(original_output)
-            
-            # Generate augmented versions
-            for i in range(augmentations_per_file):
-                augmented_audio = self.apply_random_augmentations(audio, noise_dir, prob_dict)
-                
-                # Save augmented audio
-                aug_filename = f"{base_name}_aug_{i+1}{ext}"
-                aug_path = os.path.join(output_dir, aug_filename)
-                self.save_audio(augmented_audio, aug_path)
-                generated_files.append(aug_path)
-                
-        return generated_files
+        # Apply noise
+        return self.add_background_noise(waveform, noise_waveform)
 
 
-# Example usage:
+# Example usage functions
+def load_audio_sample(file_path: str, target_sr: int = 16000) -> torch.Tensor:
+    """
+    Load an audio file and resample if necessary.
+    
+    Args:
+        file_path: Path to audio file
+        target_sr: Target sample rate
+        
+    Returns:
+        Audio tensor [channels, time]
+    """
+    waveform, sample_rate = torchaudio.load(file_path)
+    
+    # Resample if needed
+    if sample_rate != target_sr:
+        resampler = T.Resample(sample_rate, target_sr)
+        waveform = resampler(waveform)
+        
+    return waveform
+
+def augment_dataset(audio_files: List[str], 
+                   noise_files: Optional[List[str]] = None,
+                   output_dir: str = 'augmented/',
+                   augmentations_per_file: int = 3,
+                   sample_rate: int = 16000) -> None:
+    """
+    Augment an entire dataset of audio files.
+    
+    Args:
+        audio_files: List of paths to audio files
+        noise_files: List of paths to noise files (optional)
+        output_dir: Directory to save augmented files
+        augmentations_per_file: Number of augmented versions to create per file
+        sample_rate: Target sample rate
+    """
+    import os
+    os.makedirs(output_dir, exist_ok=True)
+    
+    augmentor = AudioAugmentor(sample_rate=sample_rate)
+    
+    for audio_file in tqdm(audio_files, "Augmenting"):
+        base_name = os.path.basename(audio_file)
+        name, ext = os.path.splitext(base_name)
+        
+        # Load audio
+        waveform = load_audio_sample(audio_file, target_sr=sample_rate)
+        
+        # Create augmented versions
+        for i in range(augmentations_per_file):
+            augmented = augmentor.combine_augmentations(
+                waveform, 
+                noise_files=noise_files,
+                num_augmentations=random.randint(1, 4)  # Random number of augmentations
+            )
+            
+            # Save augmented audio
+            output_path = os.path.join(output_dir, f"{name}_aug{i+1}{ext}")
+            torchaudio.save(output_path, augmented, sample_rate)
+
+
+
+# Here's an example of how to use the toolkit:
 if __name__ == "__main__":
-    augmenter = AudioAugmenter(sample_rate=16000)
+    import glob
     
-    # Example 1: Single file augmentation
-    audio = augmenter.load_audio("test.wav")
+    # Example usage
+    audio_file = "Chutiya_28ca2041-5dda-42df-8123-f58ea9c3da00_hi.wav"
+    noise_files = [
+        "Noise1.wav",
+        "Noise2.wav",
+        "Noise3.wav"
+    ]
     
-    # Individual augmentations
-    stretched_audio = augmenter.time_stretch(audio)
-    pitched_audio = augmenter.pitch_shift(audio)
+    # Load audio
+    waveform = load_audio_sample(audio_file)
     
-    # Apply room simulation
-    reverb_audio = augmenter.apply_room_simulation(audio)
+    # Initialize augmentor
+    augmentor = AudioAugmentor()
     
-    # Add background noise (if you have a noise file)
-    # noisy_audio = augmenter.add_background_noise(audio, "noise.wav")
+    # Apply a specific augmentation
+    time_stretched = augmentor.time_stretch(waveform)
     
-    # Apply all augmentations randomly with default probabilities
-    augmented_audio = augmenter.apply_random_augmentations(
-        audio, noise_dir="path/to/noise_files")
+    # Apply multiple random augmentations
+    augmented = augmentor.combine_augmentations(waveform, noise_files=noise_files)
     
-    # Example 2: Generate an augmented dataset
-    # generated_files = augmenter.generate_augmented_dataset(
-    #     "input_audio", "augmented_output", "noise_samples", 
-    #     augmentations_per_file=3)
+    # Process a dataset
+    
+    audio_dir = "./Audio_dataset"
+    audio_extensions = ['*.wav', '*.mp3', '*.flac', '*.ogg', '*.opus']
+    audio_files = []
+    labels = []
+    
+    # Get all class folders
+    class_dirs = [d for d in os.listdir(audio_dir) if os.path.isdir(os.path.join(audio_dir, d))]
+    # print(class_dirs)
+    # Collect all audio files and their labels
+    for class_name in class_dirs:
+        class_path = os.path.join(audio_dir, class_name)
+        for ext in audio_extensions:
+            files = glob.glob(os.path.join(class_path, ext))
+            audio_files.extend(files)
+            # if class_name == "backward":
+            #     print(files)
+            labels.extend([class_name] * len(files))
+    
+    print(f"Found {len(audio_files)} audio files in {len(class_dirs)} classes")
+    
+    
+    # audio_files = ["Kya chal raha hai_28ca2041-5dda-42df-8123-f58ea9c3da00_hi.wav", "test2.wav"]
+    augment_dataset(audio_files, noise_files, output_dir="Augmented/")
+
+# # Here's an example of how to use the toolkit:
+# if __name__ == "__main__":
+#     # Example usage
+#     audio_file = "Chutiya_28ca2041-5dda-42df-8123-f58ea9c3da00_hi.wav"
+#     noise_files = [
+#         "Noise1.wav",
+#         "Noise2.wav",
+#         "Noise3.wav"
+#     ]
+    
+#     # Load audio
+#     waveform = load_audio_sample(audio_file)
+    
+#     # Initialize augmentor
+#     augmentor = AudioAugmentor()
+    
+#     # Apply a specific augmentation
+#     time_stretched = augmentor.time_stretch(waveform)
+    
+#     # Apply multiple random augmentations
+#     augmented = augmentor.combine_augmentations(waveform, noise_files=noise_files)
+    
+#     # Process a dataset
+#     audio_files = ["Kya chal raha hai_28ca2041-5dda-42df-8123-f58ea9c3da00_hi.wav", "test2.wav"]
+#     augment_dataset(audio_files, noise_files, output_dir="Augmented/")

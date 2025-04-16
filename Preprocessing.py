@@ -41,19 +41,21 @@ def preprocess_audio_dataset(audio_dir, sample_rate=16000, n_mels=40, n_fft=1024
         Maximum duration in seconds
     """
     # Find all audio files
-    audio_extensions = ['*.wav', '*.mp3', '*.flac', '*.ogg']
+    audio_extensions = ['*.wav', '*.mp3', '*.flac', '*.ogg', '*.opus']
     audio_files = []
     labels = []
     
     # Get all class folders
     class_dirs = [d for d in os.listdir(audio_dir) if os.path.isdir(os.path.join(audio_dir, d))]
-    
+    # print(class_dirs)
     # Collect all audio files and their labels
     for class_name in class_dirs:
         class_path = os.path.join(audio_dir, class_name)
         for ext in audio_extensions:
             files = glob.glob(os.path.join(class_path, ext))
             audio_files.extend(files)
+            # if class_name == "backward":
+            #     print(files)
             labels.extend([class_name] * len(files))
     
     print(f"Found {len(audio_files)} audio files in {len(class_dirs)} classes")
@@ -286,9 +288,11 @@ if __name__ == "__main__":
     
     # Preprocess the dataset
     X, y, label_encoder, max_length, max_duration = preprocess_audio_dataset(
-        audio_dir="Audio_dataset", 
-        cache_dir="./dataset_cache"
+        audio_dir="./Audio_dataset", 
+        cache_dir="./dataset_cache2"
     )
+    
+    print(X.shape, y.shape)
 
     # Create dataset and dataloader
     dataset = AudioMelDataset(X, y)
