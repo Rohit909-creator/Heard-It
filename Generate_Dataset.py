@@ -10,16 +10,24 @@ def generate_wakewords(wakeword: str):
     url = "https://api.cartesia.ai/tts/bytes"
     
     # Define voice IDs
-    voice_ids = [
-        "9b953e7b-86a8-42f0-b625-1434fb15392b",  # Original voice from your example
-        "faf0731e-dfb9-4cfc-8119-259a79b27e12",  # Adding more example voice IDs
-        "bec003e2-3cb3-429c-8468-206a393c67ad",
-        "e61a659d-56d5-4023-a499-1e1bccbc40e9",
-        "28ca2041-5dda-42df-8123-f58ea9c3da00",
-        "d088cdf6-0ef0-4656-aea8-eb9b004e82eb",
-        "fd2ada67-c2d9-4afe-b474-6386b87d8fc3"
-    ]
+    # voice_ids = [
+    #     "9b953e7b-86a8-42f0-b625-1434fb15392b",  # Original voice from your example
+    #     "faf0731e-dfb9-4cfc-8119-259a79b27e12",  # Adding more example voice IDs
+    #     "bec003e2-3cb3-429c-8468-206a393c67ad",
+    #     "e61a659d-56d5-4023-a499-1e1bccbc40e9",
+    #     "28ca2041-5dda-42df-8123-f58ea9c3da00",
+    #     "d088cdf6-0ef0-4656-aea8-eb9b004e82eb",
+    #     "fd2ada67-c2d9-4afe-b474-6386b87d8fc3"
+    # ]
     
+    voice_ids = [
+        "bf0a246a-8642-498a-9950-80c35e9276b5",
+        "c99d36f3-5ffd-4253-803a-535c1bc9c306",
+        "00967b2f-88a6-4a31-8153-110a92134b9f",
+        "57c63422-d911-4666-815b-0c332e4d7d6a",
+        "9fb269e7-70fe-4cbe-aa3f-28bdb67e3e84",
+        
+    ]
     # Languages to try
     languages = ["en"]
     
@@ -81,7 +89,7 @@ def generate_wakewords(wakeword: str):
 
 if __name__ == "__main__":
     
-    with open("english_commands.txt", 'r') as f:
+    with open("EnglishNames.txt", 'r') as f:
         s = f.read()
     words = s.split('\n')
     for word in words:
@@ -100,7 +108,11 @@ if __name__ == "__main__":
     #         os.makedirs(f"./Audio_dataset/{word}", exist_ok=True)
     #     except Exception as e:
     #         print("Exception:", e)
-            
+    
+    
+# Shruti
+# Mantra    
+        
             
 # Turn on the lights
 # Turn off the lights

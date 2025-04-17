@@ -291,12 +291,12 @@ def create_data():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     # X, y, label_encoder, max_length, max_duration = preprocess_audio_dataset(
     #     audio_dir="Audio_dataset", 
-    #     cache_dir="./dataset_cache"
+    #     cache_dir="./dataset_cache2"
     # )
     # X = np.expand_dims(X, 1)
-    X = torch.load("./dataset_cache/X.pt", weights_only=True)
+    X = torch.load("./dataset_cache2/X.pt", weights_only=True)
     X = X.unsqueeze(1)
-    y = torch.load("./dataset_cache/y.pt", weights_only=True)
+    y = torch.load("./dataset_cache2/y.pt", weights_only=True)
     print("Shapes: ",X.shape, y.shape)
     # Create dataset and dataloader
     # dataset = AudioMelDataset(X, y)
@@ -327,13 +327,14 @@ def get_dataloaders(batch_size=32):
 # Initialize and train model
 def train_model():
     # input_size, hidden_size, output_size = 256, 512, 2
-    with open("./dataset_cache/classes.txt", 'r') as f:
+    # Maximum audio duration: 4.14 seconds
+    with open("./dataset_cache2/classes.txt", 'r') as f:
         s = f.read()
     num_classes = len(s.split("\n"))
     print(f"Num Classes: {num_classes}")
     # model = CRNN(num_classes=num_classes)
-    model = ResNetMel(num_classes=175, dropout=0.5)
-
+    model = ResNetMel(num_classes=num_classes, dropout=0.2)
+    print(model.named_modules)
     train_loader, val_loader = get_dataloaders()
 
     checkpoint_callback = ModelCheckpoint(
@@ -345,7 +346,7 @@ def train_model():
     #                     enable_progress_bar=True,  # Disable default tqdm ba
     #                     )
     
-    trainer = pl.Trainer(max_epochs=25,
+    trainer = pl.Trainer(max_epochs=100,
                         enable_progress_bar=True,  # Disable default tqdm ba
                         num_nodes=1,
                         enable_checkpointing=True
