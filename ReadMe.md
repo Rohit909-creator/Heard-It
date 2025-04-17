@@ -111,4 +111,4 @@ Detect wakewords like:
 
 ## 👨‍💻 Contributors
 
-- **Your Name** – [@yourgithub](https://github.com/Rohit909-creator)
+- **Me** – [@Rohit Francis](https://github.com/Rohit909-creator)
