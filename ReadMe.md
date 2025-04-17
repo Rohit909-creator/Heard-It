@@ -48,8 +48,6 @@ Our goal is to create **rich embeddings** that allow for **custom wakeword** and
 - 🎵 **Audio Dataset (Audio_dir/)**: [Audio_dir](https://drive.google.com/file/d/1nt7fNs_OKq5X4Tk-IXCx8ueU8_-Q-f3I/view?usp=sharing)
 - 🧠 **Pretrained Models (lightning_logs/)**: [lightning_logs](https://drive.google.com/file/d/1nt7fNs_OKq5X4Tk-IXCx8ueU8_-Q-f3I/view?usp=sharing)
 
-(*Replace `#` with your actual links*)
-
 ---
 
 ## 🚀 Getting Started
@@ -58,7 +56,7 @@ Our goal is to create **rich embeddings** that allow for **custom wakeword** and
 
 ```bash
 git clone https://github.com/yourusername/heard-it.git
-cd heard-it
+cd heard-it/src/
 ```
 
 ### 2. Install Dependencies
