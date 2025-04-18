@@ -195,6 +195,15 @@ class ResNetMel(pl.LightningModule):
             self.model.conv1.weight.data = new_weights
         
         # Modify the final fully connected layer
+        # self.model.fc = nn.Sequential(
+        #     nn.Linear(512, 4096),
+        #     nn.ReLU(),
+        #     # nn.Dropout(dropout),
+        #     nn.Linear(4096, 4096),
+        #     nn.ReLU(),
+        #     nn.Linear(4096, num_classes)
+        # )
+        
         self.model.fc = nn.Sequential(
             nn.Dropout(dropout),
             nn.Linear(512, num_classes)
@@ -290,13 +299,13 @@ class ResNetMel(pl.LightningModule):
 def create_data():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     # X, y, label_encoder, max_length, max_duration = preprocess_audio_dataset(
-    #     audio_dir="Audio_dataset", 
-    #     cache_dir="./dataset_cache2"
+    #     audio_dir="Audio_dataset2", 
+    #     cache_dir="./mswc_cache"
     # )
     # X = np.expand_dims(X, 1)
-    X = torch.load("./dataset_cache2/X.pt", weights_only=True)
+    X = torch.load("./mswc_cache/X.pt", weights_only=True)
     X = X.unsqueeze(1)
-    y = torch.load("./dataset_cache2/y.pt", weights_only=True)
+    y = torch.load("./mswc_cache/y.pt", weights_only=True)
     print("Shapes: ",X.shape, y.shape)
     # Create dataset and dataloader
     # dataset = AudioMelDataset(X, y)
@@ -328,12 +337,12 @@ def get_dataloaders(batch_size=32):
 def train_model():
     # input_size, hidden_size, output_size = 256, 512, 2
     # Maximum audio duration: 4.14 seconds
-    with open("./dataset_cache2/classes.txt", 'r') as f:
+    with open("./mswc_cache/classes.txt", 'r') as f:
         s = f.read()
     num_classes = len(s.split("\n"))
     print(f"Num Classes: {num_classes}")
     # model = CRNN(num_classes=num_classes)
-    model = ResNetMel(num_classes=num_classes, dropout=0.2)
+    model = ResNetMel(num_classes=num_classes, dropout=0.7)
     print(model.named_modules)
     train_loader, val_loader = get_dataloaders()
 
@@ -346,7 +355,7 @@ def train_model():
     #                     enable_progress_bar=True,  # Disable default tqdm ba
     #                     )
     
-    trainer = pl.Trainer(max_epochs=100,
+    trainer = pl.Trainer(max_epochs=15,
                         enable_progress_bar=True,  # Disable default tqdm ba
                         num_nodes=1,
                         enable_checkpointing=True

@@ -16,9 +16,16 @@ from Utils import EnhancedSimilarityMatcher, Matcher
 # with open("./dataset_cache/classes.txt", 'r') as f:
 #     s = f.read()
     
-with open("./dataset_cache2/classes.txt", 'r') as f:
+with open("./mswc_cache/classes.txt", 'r') as f:
     s = f.read()
-    
+   
+# max_duration = torch.load("./mswc_cache/max_duration.pt")
+# max_length = torch.load("./mswc_cache/max_length.pt")
+
+# print(max_duration)
+# print(max_length)
+
+# exit(0)
 classes = s.split("\n")
 num_classes = len(classes)
 # CRNN
@@ -37,7 +44,12 @@ num_classes = len(classes)
 
 # Wakeword only Dataset
 # checkpoint_path = "./lightning_logs/version_17/checkpoints/epoch=24-step=61375.ckpt"
-checkpoint_path = "./lightning_logs/version_18/checkpoints/epoch=4-step=12275.ckpt"
+# checkpoint_path = "./lightning_logs/version_18/checkpoints/epoch=4-step=12275.ckpt"
+
+# MSWC Dataset Model
+# checkpoint_path = "./lightning_logs/version_21/checkpoints/epoch=5-step=18624.ckpt"
+
+checkpoint_path = "./lightning_logs/version_22/checkpoints/epoch=49-step=155200.ckpt"
 # model = CRNN.load_from_checkpoint(checkpoint_path, num_classes=74)
 # model = CRNN.load_from_checkpoint(checkpoint_path, num_classes=143)
 # model = CRNN.load_from_checkpoint(checkpoint_path, num_classes=175)
@@ -52,7 +64,10 @@ model.eval()
 # mel_spec = load_and_preprocess_audio_file("./Audio_dataset/Aneesh/Aneesh_d088cdf6-0ef0-4656-aea8-eb9b004e82eb_hi.wav", max_duration=4.14)
 # mel_spec = load_and_preprocess_audio_file("./Audio_dataset/Hello/Hello_shouted_2.wav", max_duration=5.63)
 # mel_spec = load_and_preprocess_audio_file("./Audio_dataset/Bolo/Bolo_bec003e2-3cb3-429c-8468-206a393c67ad_hi.wav", max_duration=5.63)
-mel_spec = load_and_preprocess_audio_file("Nobita.wav", max_duration=4.14)
+# mel_spec = load_and_preprocess_audio_file("Nobita.wav", max_duration=4.14)
+# mel_spec = load_and_preprocess_audio_file("Nobita.wav", max_duration=1.0)
+mel_spec = load_and_preprocess_audio_file("./Audio_dataset/Bolo/Bolo_bec003e2-3cb3-429c-8468-206a393c67ad_hi.wav", max_duration=1.0)
+# mel_spec = load_and_preprocess_audio_file("./Audio_dataset/Eli/Eli_57c63422-d911-4666-815b-0c332e4d7d6a_en.wav", max_duration=1.0)
 mel_spec_tensor = torch.tensor([mel_spec], dtype=torch.float32)
 mel_spec_tensor = mel_spec_tensor.unsqueeze(1)
 mel_spec_tensor = mel_spec_tensor.cuda()
@@ -64,7 +79,10 @@ print(classes[index])
 
 # mel_spec1 = load_and_preprocess_audio_file("./Audio_dataset/Jonathan/Jonathan_00967b2f-88a6-4a31-8153-110a92134b9f_en.wav", max_duration=4.14)
 # mel_spec1 = load_and_preprocess_audio_file("AC Chalu Karo.wav", max_duration=5.63)
-mel_spec1 = load_and_preprocess_audio_file("Bolo.wav", max_duration=4.14)
+# mel_spec1 = load_and_preprocess_audio_file("Bolo.wav", max_duration=4.14)
+# mel_spec1 = load_and_preprocess_audio_file("Bolo.wav", max_duration=1.0)
+mel_spec1 = load_and_preprocess_audio_file("./Audio_dataset/Bolo/Bolo_bec003e2-3cb3-429c-8468-206a393c67ad_hi.wav", max_duration=1.0)
+# mel_spec1 = load_and_preprocess_audio_file("Nobi.wav", max_duration=1.0)
 mel_spec_tensor1 = torch.tensor([mel_spec1], dtype=torch.float32)
 mel_spec_tensor1 = mel_spec_tensor1.unsqueeze(1)
 mel_spec_tensor1 = mel_spec_tensor1.cuda()
@@ -73,7 +91,7 @@ out = model(mel_spec_tensor1)
 index = torch.argmax(out, dim=-1)
 print(out.shape, index)
 print(classes[index])
-model.linear_map = nn.Sequential()
+model.model.fc[1] = nn.Sequential()
 print(model.named_modules)
 
 out = model(mel_spec_tensor)

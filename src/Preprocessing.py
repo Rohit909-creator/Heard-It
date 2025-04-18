@@ -288,8 +288,8 @@ if __name__ == "__main__":
     
     # Preprocess the dataset
     X, y, label_encoder, max_length, max_duration = preprocess_audio_dataset(
-        audio_dir="./Audio_dataset", 
-        cache_dir="./dataset_cache2"
+        audio_dir="./Audio_dataset2", 
+        cache_dir="./mswc_cache"
     )
     
     print(X.shape, y.shape)
