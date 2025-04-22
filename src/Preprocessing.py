@@ -138,14 +138,15 @@ def load_and_preprocess_audio_file(audio_path, sample_rate=16000, n_mels=40, n_f
     """
     # Load audio file
     waveform, sr = torchaudio.load(audio_path)
-    
+    # print("In load audio from file: ", waveform.shape, sr)
     # Convert to mono if needed
     if waveform.shape[0] > 1:
         waveform = torch.mean(waveform, dim=0, keepdim=True)
-    
+        # print(waveform.shape, sr)
     # Squeeze extra dimension for processing
+    # print(waveform.shape, sr)
     waveform = waveform.squeeze(0)
-    
+    # print(f'After squeeze: {waveform.shape}')
     # Resample if needed
     if sr != sample_rate:
         resampler = torchaudio.transforms.Resample(sr, sample_rate)
@@ -199,14 +200,17 @@ def load_and_preprocess_audio(waveform, sr, sample_rate=16000, n_mels=40, n_fft=
     """
     # Load audio file
     # waveform, sr = torchaudio.load(audio_path)
+    
     waveform = torch.tensor(waveform)
     # Convert to mono if needed
+    # print("In load audio: ",waveform.shape, sr)
     # print(waveform.shape, waveform.shape[0])
-    if waveform.shape[0] > 1:
-        waveform = torch.mean(waveform, dim=0, keepdim=True)
-        # print(waveform.shape, waveform.shape[0])
+    # if waveform.shape[0] > 1:
+    #     waveform = torch.mean(waveform, dim=0, keepdim=True)
+    #     print(waveform.shape, waveform.shape[0])
     # Squeeze extra dimension for processing
-    # waveform = waveform.squeeze(0)
+    # print(f'After squeeze: {waveform.shape}')
+    waveform = waveform.squeeze(0)
     
     # Resample if needed
     if sr != sample_rate:
@@ -287,18 +291,24 @@ def load_cached_dataset(cache_dir):
 if __name__ == "__main__":
     
     # Preprocess the dataset
-    X, y, label_encoder, max_length, max_duration = preprocess_audio_dataset(
-        audio_dir="./Audio_dataset2", 
-        cache_dir="./mswc_cache"
-    )
+    # X, y, label_encoder, max_length, max_duration = preprocess_audio_dataset(
+    #     audio_dir="./Audio_dataset2", 
+    #     cache_dir="./mswc_cache"
+    # )
     
-    print(X.shape, y.shape)
+    # print(X.shape, y.shape)
 
-    # Create dataset and dataloader
-    dataset = AudioMelDataset(X, y)
-    dataloader = torch.utils.data.DataLoader(
-        dataset, 
-        batch_size=32, 
-        shuffle=True, 
-        num_workers=4
-    )
+    # # Create dataset and dataloader
+    # dataset = AudioMelDataset(X, y)
+    # dataloader = torch.utils.data.DataLoader(
+    #     dataset, 
+    #     batch_size=32, 
+    #     shuffle=True, 
+    #     num_workers=4
+    # )
+    import librosa
+    audio, sr = librosa.load("./Audios4testing/sample_3.wav", sr=16000)
+    # print(audio.shape, sr)
+    mel_spec2 = load_and_preprocess_audio_file("./Audios4testing/sample_3.wav")
+    mel_spec1 = load_and_preprocess_audio(audio, sr)
+    

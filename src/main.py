@@ -6,13 +6,13 @@ import time
 from typing import Optional, Dict
 import json
 import os
-from Trainer import CRNN
-from Inference import Matcher
+from Trainer import ResNetMel
+# from Inference import Matcher
 from Preprocessing import load_and_preprocess_audio_file, load_and_preprocess_audio
 import tensorflow as tf
-from Utils import EnhancedSimilarityMatcher
+from Utils import Matcher
 import torch
-checkpoint_path = "./lightning_logs/version_0/checkpoints/epoch=29-step=390.ckpt"
+checkpoint_path = "./lightning_logs/version_23/checkpoints/epoch=14-step=46560.ckpt"
 
 class SimpleMicStream:
     """Handles real-time audio capture from microphone"""
@@ -67,7 +67,7 @@ class HotwordDetector:
                  model_path: str,
                  matcher,
                  threshold: float = 0.50,
-                 window_length: float = 5.63):
+                 window_length: float = 1.0):
         self.hotword = hotword
         self.threshold = threshold
         self.window_length = window_length
@@ -78,8 +78,10 @@ class HotwordDetector:
         self.reference_embeddings = self._load_reference_embeddings(reference_file)
         
         # Initialize model
-        self.model = CRNN.load_from_checkpoint(checkpoint_path, num_classes=74).to('cpu')
-        
+        # self.model = CRNN.load_from_checkpoint(checkpoint_path, num_classes=74).to('cpu')
+        self.model = ResNetMel.load_from_checkpoint(checkpoint_path, num_classes=52).to('cpu')
+        self.model.model.fc[4] = torch.nn.Sequential()
+        self.model.eval()
         self.matcher = matcher
         # Buffer for collecting audio frames
         self.audio_buffer = np.array([], dtype=np.float32)
@@ -97,21 +99,30 @@ class HotwordDetector:
             
         # Add frame to buffer
         self.audio_buffer = np.append(self.audio_buffer, frame)
-        print("Time it")
+        # print("Time it")
         # If we have enough audio, process it
         if len(self.audio_buffer) >= self.window_samples:
             # Take the last window_samples
             audio_window = self.audio_buffer[-self.window_samples:]
-            mel_spec = load_and_preprocess_audio(audio_window, sr=16000, max_duration=5.63)
+            # print(audio_window.shape)
+            mel_spec = load_and_preprocess_audio(audio_window, sr=16000, max_duration=1.0)
             
-            mel_spec = torch.tensor([mel_spec], dtype=torch.float32).unsqueeze(1)
+            mel_spec_tensor = torch.tensor([mel_spec], dtype=torch.float32)
+            mel_spec_tensor = mel_spec_tensor.unsqueeze(1)
+            mel_spec_tensor = mel_spec_tensor
+            # print(mel_spec_tensor.shape)
+            current_embeddings = self.model(mel_spec_tensor)
             # Get embeddings for current audio
-            current_embeddings = self.model(mel_spec)
+            # current_embeddings = self.model(mel_spec)
             # current_embeddings = current_embeddings.squeeze().detach().numpy()
             # Use the matcher to determine if this is a wake word
-            noise_level = self.matcher.estimate_noise_level(audio_window)
+            # print(torch.cosine_similarity(current_embeddings, out1, dim=-1))
+            reference_embeddings = torch.tensor(self.reference_embeddings, dtype=torch.float32)
+            is_wake_word, confidence = self.matcher.match(current_embeddings, reference_embeddings)
+            print(is_wake_word, confidence)
+            # noise_level = self.matcher.estimate_noise_level(audio_window)
             
-            is_wake_word, confidence, similarities = self.matcher.is_wake_word(current_embeddings, noise_level)
+            # is_wake_word, confidence, similarities = self.matcher.is_wake_word(current_embeddings, noise_level)
             
             # Set input tensor
             # interpreter.set_tensor(input_details[0]['index'], 
@@ -157,88 +168,19 @@ def main():
     
     base_dir = "./"
     device = torch.device('cpu')
-    model = CRNN.load_from_checkpoint(checkpoint_path, num_classes=74).to(device)
-    
-    
-    # dir_list = os.listdir(os.path.join(base_dir, "wake_word_data", "recordings"))
-    
-    positive_files = [
-        os.path.join(base_dir, r"Audio_dataset\Bolo\Bolo_9b953e7b-86a8-42f0-b625-1434fb15392b_hi.wav"),
-        os.path.join(base_dir, r"Audio_dataset\Bolo\Bolo_28ca2041-5dda-42df-8123-f58ea9c3da00_hi.wav"),
-        os.path.join(base_dir, r"Audio_dataset\Bolo\Bolo_bec003e2-3cb3-429c-8468-206a393c67ad_hi.wav"),
-        os.path.join(base_dir, r"Audio_dataset\Bolo\Bolo_d088cdf6-0ef0-4656-aea8-eb9b004e82eb_hi.wav"),
-        os.path.join(base_dir, r"Audio_dataset\Bolo\Bolo_e61a659d-56d5-4023-a499-1e1bccbc40e9_hi.wav"),
-        os.path.join(base_dir, r"Audio_dataset\Bolo\Bolo_faf0731e-dfb9-4cfc-8119-259a79b27e12_hi.wav"),
-        os.path.join(base_dir, r"Audio_dataset\Bolo\Bolo_fd2ada67-c2d9-4afe-b474-6386b87d8fc3_hi.wav"),
-        # os.path.join(base_dir, r"tts_samples\positive\Nobita_en-US-zion.mp3"),
-        # os.path.join(base_dir, "tts_samples", "negative", f"Aira1.mp3"),
-        # os.path.join(base_dir, "tts_samples", "negative", f"Aira0.mp3"),
-    ]
-    
-    negative_files = [
-        # os.path.join(base_dir, r"Audio_dataset\Bolo\Bolo_bec003e2-3cb3-429c-8468-206a393c67ad_hi.wav"),
-        # os.path.join(base_dir, r"Audio_dataset\Bolo\Bolo_d088cdf6-0ef0-4656-aea8-eb9b004e82eb_hi.wav"),
-        os.path.join(base_dir, r"Audio_dataset\AC chalu karo\AC chalu karo_e61a659d-56d5-4023-a499-1e1bccbc40e9_hi.wav"),
-        os.path.join(base_dir, r"Audio_dataset\AC chalu karo\AC chalu karo_faf0731e-dfb9-4cfc-8119-259a79b27e12_hi.wav"),
-        os.path.join(base_dir, r"Audio_dataset\Anuplabdhata\Anuplabdhata_faf0731e-dfb9-4cfc-8119-259a79b27e12_hi.wav"),
-        os.path.join(base_dir, r"Audio_dataset\Anuplabdhata\Anuplabdhata_28ca2041-5dda-42df-8123-f58ea9c3da00_hi.wav"),
-        # os.path.join(base_dir, "tts_samples", "negative", "Xylophone_en-IN-aarav.mp3"),
-        # os.path.join(base_dir, "tts_samples", "negative", "Xylophone_en-IN-alia.mp3"),
-        # os.path.join(base_dir, "tts_samples", "negative", "Xylophone_en-US-zion.mp3"),
-        # os.path.join(base_dir, "tts_samples", "negative", "Xylophone_en-US-natalie.mp3"),
-        # os.path.join(base_dir, "tts_samples", "negative", "Quasar_en-IN-alia.mp3"),
-        # os.path.join(base_dir, "tts_samples", "negative", "Quasar_en-IN-aarav.mp3"),
-        # os.path.join(base_dir, "tts_samples", "negative", "Quasar_en-US-zion.mp3"),
-        # os.path.join(base_dir, "tts_samples", "negative", "Quasar_en-US-natalie.mp3"),
-    ]
-        
-    # Process positive examples
-    print(f"{Fore.GREEN}Processing positive examples...{Style.RESET_ALL}")
-    positive_embeddings = []
-    # device = torch.device("cpu")
-    for file in positive_files:
-        
-        mel_spec = load_and_preprocess_audio_file(file, max_duration=5.63)
-        mel_spec = torch.tensor([mel_spec], dtype=torch.float32).unsqueeze(1)
-        # audio, sr = librosa.load(file, sr=16000)
-        # # Ensure audio is exactly 24000 samples long
-        # expected_length = 24000
-        # if len(audio) < expected_length:
-        #     pad_length = expected_length - len(audio)
-        #     audio = np.pad(audio, (0, pad_length), mode='constant')  # Pad with zeros
-        # audio = torch.tensor(audio, dtype=torch.float32).unsqueeze(1)
-        print(mel_spec.shape)
-        emb = model(mel_spec)
-        positive_embeddings.append(emb)
-    
-    # Process negative examples
-    print(f"{Fore.RED}Processing negative examples...{Style.RESET_ALL}")
-    negative_embeddings = []
-    for file in negative_files:
-        
-        # audio, sr = librosa.load(file, sr=16000)
-        # # Ensure audio is exactly 24000 samples long
-        # expected_length = 24000
-        # if len(audio) < expected_length:
-        #     pad_length = expected_length - len(audio)
-        #     audio = np.pad(audio, (0, pad_length), mode='constant')  # Pad with zeros
-        #     audio = torch.tensor(audio, dtype=torch.float32).unsqueeze(1)
-        mel_spec = load_and_preprocess_audio_file(file, max_duration=5.63)
-        mel_spec = torch.tensor([mel_spec], dtype=torch.float32).unsqueeze(1)
-        emb = model(mel_spec)
-        negative_embeddings.append(emb)
+    # model = CRNN.load_from_checkpoint(checkpoint_path, num_classes=74).to(device)
     
     # Initialize matcher
-    matcher = EnhancedSimilarityMatcher(positive_embeddings, negative_embeddings)
+    # matcher = EnhancedSimilarityMatcher(positive_embeddings, negative_embeddings)
     print("ya here")
-    
+    matcher = Matcher()
     # Initialize detector with your ONNX model path
     wake_word_detector = HotwordDetector(
-        hotword="Bolo",
+        hotword="Nigga",
         reference_file="path_to_reference.json",  # Contains reference embeddings
         model_path="./resnet_50_arc/slim_93%_accuracy_72.7390%.onnx",
         matcher=matcher,
-        window_length=5.63,
+        window_length=1.0,
         threshold=0.5  # Adjust based on your needs
     )
     

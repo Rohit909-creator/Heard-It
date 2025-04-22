@@ -25,7 +25,7 @@ checkpoint_path = "./lightning_logs/version_23/checkpoints/epoch=14-step=46560.c
 model = ResNetMel.load_from_checkpoint(checkpoint_path, num_classes=num_classes)
 model.eval()
 
-mel_spec = load_and_preprocess_audio_file("./Audios4testing/munez_3.wav", max_duration=1.0)
+mel_spec = load_and_preprocess_audio_file("./Audios4testing/sample_3.wav", max_duration=1.0)
 mel_spec_tensor = torch.tensor([mel_spec], dtype=torch.float32)
 mel_spec_tensor = mel_spec_tensor.unsqueeze(1)
 mel_spec_tensor = mel_spec_tensor.cuda()
@@ -35,7 +35,7 @@ index = torch.argmax(out, dim=-1)
 print(out.shape, index)
 print(classes[index])
 
-mel_spec1 = load_and_preprocess_audio_file("./Audios4testing/munez_2.wav", max_duration=1.0)
+mel_spec1 = load_and_preprocess_audio_file("./Audios4testing/sample_2.wav", max_duration=1.0)
 
 mel_spec_tensor1 = torch.tensor([mel_spec1], dtype=torch.float32)
 mel_spec_tensor1 = mel_spec_tensor1.unsqueeze(1)
@@ -59,3 +59,8 @@ print(out1.shape)
 matcher = Matcher()
 print(torch.cosine_similarity(out, out1, dim=-1))
 print(matcher.match(out, out1))
+import json
+# Save the embeddings to a JSON file
+data = {"embeddings": out.cpu().detach().numpy().tolist()}
+with open("path_to_reference.json", "w") as f:
+    f.write(json.dumps(data))
