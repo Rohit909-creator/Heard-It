@@ -100,7 +100,7 @@ Detect wakewords like:
 - [x] Real-time Wakeword Detection
 - [x] Data Augmentation Pipeline
 - [x] Training with ResNet18
-- [ ] Custom Wakeword Support from User Input
+- [x] Custom Wakeword Support from User Input
 - [ ] Model Quantization for Mobile
 - [ ] Android/iOS Compatibility (TFLite/ONNX export)
 - [ ] Rich Embedding Visualizer
