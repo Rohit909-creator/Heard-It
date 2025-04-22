@@ -195,19 +195,19 @@ class ResNetMel(pl.LightningModule):
             self.model.conv1.weight.data = new_weights
         
         # Modify the final fully connected layer
-        # self.model.fc = nn.Sequential(
-        #     nn.Linear(512, 4096),
-        #     nn.ReLU(),
-        #     # nn.Dropout(dropout),
-        #     nn.Linear(4096, 4096),
-        #     nn.ReLU(),
-        #     nn.Linear(4096, num_classes)
-        # )
-        
         self.model.fc = nn.Sequential(
-            nn.Dropout(dropout),
-            nn.Linear(512, num_classes)
+            nn.Linear(512, 4096),
+            nn.ReLU(),
+            # nn.Dropout(dropout),
+            nn.Linear(4096, 4096),
+            nn.ReLU(),
+            nn.Linear(4096, num_classes)
         )
+        
+        # self.model.fc = nn.Sequential(
+        #     nn.Dropout(dropout),
+        #     nn.Linear(512, num_classes)
+        # )
         
         # Loss function for training
         self.loss = nn.CrossEntropyLoss()

@@ -465,7 +465,7 @@ if __name__ == "__main__":
     noise_files = [
         "Noise1.wav",
         "Noise2.wav",
-        "Noise3.wav"
+        # "Noise3.wav"
     ]
     
     # Load audio
@@ -489,6 +489,8 @@ if __name__ == "__main__":
     
     # Get all class folders
     class_dirs = [d for d in os.listdir(audio_dir) if os.path.isdir(os.path.join(audio_dir, d))]
+    
+    
     # print(class_dirs)
     # Collect all audio files and their labels
     for class_name in class_dirs:
@@ -503,7 +505,7 @@ if __name__ == "__main__":
     print(f"Found {len(audio_files)} audio files in {len(class_dirs)} classes")
     
     
-    # audio_files = ["Kya chal raha hai_28ca2041-5dda-42df-8123-f58ea9c3da00_hi.wav", "test2.wav"]
+    audio_files = ["output.wav", "output2.wav", "output3.wav"]
     augment_dataset(audio_files, noise_files, output_dir="Augmented/")
 
 # # Here's an example of how to use the toolkit:
