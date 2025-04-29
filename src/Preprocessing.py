@@ -5,6 +5,7 @@ import numpy as np
 import torchaudio
 from sklearn.preprocessing import LabelEncoder
 import torch.nn.functional as F
+from tqdm import tqdm
 
 def preprocess_audio_dataset(audio_dir, sample_rate=16000, n_mels=40, n_fft=1024, hop_length=512, max_duration=None, cache_dir=None):
     """
@@ -288,12 +289,71 @@ def load_cached_dataset(cache_dir):
     
     return X, y, label_encoder, max_length, max_duration
 
+
+def audio_truncate(audio_dir):
+    
+    audio_extensions = ['*.wav', '*.mp3', '*.flac', '*.ogg', '*.opus']
+    audio_files = []
+    labels = []
+    
+    # Get all class folders
+    class_dirs = [d for d in os.listdir(audio_dir) if os.path.isdir(os.path.join(audio_dir, d))]
+    # print(class_dirs)
+    # Collect all audio files and their labels
+    for class_name in class_dirs:
+        class_path = os.path.join(audio_dir, class_name)
+        for ext in audio_extensions:
+            files = glob.glob(os.path.join(class_path, ext))
+            audio_files.extend(files)
+            # if class_name == "backward":
+            #     print(files)
+            labels.extend([class_name] * len(files))
+    
+    print(f"Found {len(audio_files)} audio files in {len(class_dirs)} classes")
+    
+    for file_path in audio_files:
+        
+        audio, sr = torchaudio.load(file_path)
+        if audio.shape[1] < 6000:
+            print(f'Bad file:{file_path} length:{audio.shape[1]}')
+
+
+def save_files2folders(audio_dir:str):
+    import shutil
+    
+    # this is the first thing to run when you have to make dirs for this
+    
+    # audio_files = os.listdir(audio_dir)
+    # audio_folders = [filename[:filename.index("_")] for filename in audio_files]
+    # audio_folders_set = set(audio_folders)
+    # print(audio_folders_set, len(audio_folders_set))
+    
+    # for audio_folder in audio_folders_set:
+    #     os.makedirs(os.path.join(audio_dir, audio_folder), exist_ok=True)
+    
+    # after that ignore folders and focus on audio_files in the same directory
+    
+    audio_files = os.listdir(audio_dir)
+    audio_files = [audio_file for audio_file in audio_files if ".wav" in audio_file]
+    # print(audio_files)
+    for audio_file in audio_files:
+        src_path = os.path.join("AI_Audios_Augmented", audio_file)
+        print(audio_file)
+        dest_path = os.path.join("AI_Audios_Augmented", audio_file[:audio_file.index("_")])
+        print(src_path, dest_path)
+        shutil.move(src_path, dest_path)
+        # break
+    
+    
+                      
+
 if __name__ == "__main__":
     
     # Preprocess the dataset
     # X, y, label_encoder, max_length, max_duration = preprocess_audio_dataset(
-    #     audio_dir="./Audio_dataset2", 
-    #     cache_dir="./mswc_cache"
+    #     audio_dir="./Artificial_plus_manual", 
+    #     cache_dir="./AI_audios_cache",
+    #     max_duration=1.0
     # )
     
     # print(X.shape, y.shape)
@@ -306,9 +366,14 @@ if __name__ == "__main__":
     #     shuffle=True, 
     #     num_workers=4
     # )
-    import librosa
-    audio, sr = librosa.load("./Audios4testing/sample_3.wav", sr=16000)
-    # print(audio.shape, sr)
-    mel_spec2 = load_and_preprocess_audio_file("./Audios4testing/sample_3.wav")
-    mel_spec1 = load_and_preprocess_audio(audio, sr)
+    # import librosa
+    # audio, sr = librosa.load("./Audios4testing/sample_3.wav", sr=16000)
+    # # print(audio.shape, sr)
+    # mel_spec2 = load_and_preprocess_audio_file("./Audios4testing/sample_3.wav")
+    # mel_spec1 = load_and_preprocess_audio(audio, sr)
     
+    # audio_dir = r"C:\Users\Rohit Francis\Desktop\Codes\Datasets\AI Generated Audios"
+    # audio_truncate(audio_dir)
+    
+    audio_dir = "./AI_Audios_Augmented"
+    save_files2folders(audio_dir)

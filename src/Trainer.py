@@ -13,81 +13,73 @@ from Preprocessing import preprocess_audio_dataset, AudioMelDataset
 import numpy as np
 
 # device = torch.device('cuda' if torch.cuda.is_available() else "cpu")
-class CRNN(pl.LightningModule):
-    def __init__(self, mel_bins=40, time_frames=100, num_classes=10, dropout=0.0, learning_rate=0.001):
+
+class ResNetMelLite(pl.LightningModule):
+    def __init__(self, mel_bins=40, time_frames=100, num_classes=10, dropout=0.0, learning_rate=0.001, pretrained=True):
         """
-        Siamese Network for comparing audio embeddings using CNN-based feature extraction
+        ResNet model modified to work with mel spectrograms (1 channel input)
         
         Args:
-            embedding_dim (int): Dimension of input embeddings (Whisper embeddings)
-            seq_length (int): Sequence length of Whisper embeddings
-            output_dim (int): Final embedding dimension
+            mel_bins (int): Number of mel frequency bins
+            time_frames (int): Number of time frames
+            num_classes (int): Number of output classes
+            dropout (float): Dropout rate
             learning_rate (float): Learning rate for optimizer
+            pretrained (bool): Whether to use pretrained weights for layers beyond the first conv
         """
-        super(CRNN, self).__init__()
+        super(ResNetMel, self).__init__()
         self.lr = learning_rate
         self.num_classes = num_classes
         self.mel_bins = mel_bins
         
+        # Load the standard ResNet18 model
+        self.model = torchvision.models.resnet18(pretrained=pretrained)
         
         
-        self.conv1 = nn.Conv2d(1, 16, (3,3))
-        self.bn1 = nn.BatchNorm2d(16)
-        self.relu = nn.ReLU()
-        self.pool1 = nn.MaxPool2d((2,2))
+        # Modify the first convolutional layer to accept 1 channel instead of 3
+        # We'll create a new conv1 with 1 input channel but same output channels
+        original_conv1 = self.model.conv1
+        self.model.conv1 = nn.Conv2d(
+            1, 
+            original_conv1.out_channels, 
+            kernel_size=original_conv1.kernel_size, 
+            stride=original_conv1.stride, 
+            padding=original_conv1.padding, 
+            bias=(original_conv1.bias is not None)
+        )
         
-        self.conv2 = nn.Conv2d(16, 32, (3,3))
-        self.bn2 = nn.BatchNorm2d(32)
-        self.relu = nn.ReLU()
-        self.pool2 = nn.MaxPool2d((2,2))
+        # If using pretrained weights, we need to adapt the weights for the first layer
+        if pretrained:
+            # Average the weights across the 3 input channels to create weights for 1 channel
+            new_weights = original_conv1.weight.data.mean(dim=1, keepdim=True)
+            self.model.conv1.weight.data = new_weights
         
-        self.conv3 = nn.Conv2d(32, 64, (3,3))
-        self.bn3 = nn.BatchNorm2d(64)
-        self.relu = nn.ReLU()
-        self.pool3 = nn.MaxPool2d((1,2))
+        # Modify the final fully connected layer
+        self.model.fc = nn.Sequential(
+            nn.Linear(512, 4096),
+            nn.ReLU(),
+            # nn.Dropout(dropout),
+            nn.Linear(4096, 4096),
+            nn.ReLU(),
+            nn.Linear(4096, num_classes)
+        )
         
-        self.dropout = nn.Dropout(0.4)
-        # self.gru1 = nn.GRU(64*(mel_bins//8), 64, batch_first=True)
-        # self.gru2 = nn.GRU(64, 64, batch_first=True)
-        self.fc = nn.Linear(64*(self.mel_bins)*3, (64*(self.mel_bins)*3)//2)
-        self.linear_map = nn.Linear((64*(self.mel_bins)*3)//2, num_classes)
+        # self.model.fc = nn.Sequential(
+        #     nn.Dropout(dropout),
+        #     nn.Linear(512, num_classes)
+        # )
         
         # Loss function for training
         self.loss = nn.CrossEntropyLoss()
-        
+    
     def forward(self, x):
         """
-        Forward pass for one input
+        Forward pass
         
         Args:
-            x: Input embedding of shape [batch_size, seq_length, 1, embedding_dim]
+            x: Input mel spectrogram of shape [batch_size, 1, mel_bins, time_frames]
         """
-        B, _, _, _ = x.shape
-        x = self.conv1(x)
-        x = self.bn1(x)
-        x = self.relu(x)
-        x = self.pool1(x)
-        
-        x = self.conv2(x)
-        x = self.bn2(x)
-        x = self.relu(x)
-        x = self.pool2(x)
-        
-        x = self.conv3(x)
-        x = self.bn3(x)
-        x = self.relu(x)
-        x = self.pool3(x)
-        
-        # x = x.view(-1, 64*(self.mel_bins//8))
-        # print(x.shape)
-        x = x.view(B, 64*(self.mel_bins)*3)
-        # print(x.shape)
-        # x = self.gru1(x)
-        # x = self.gru2(x)
-        x = self.dropout(self.fc(x))
-        x = self.linear_map(x)
-        
-        return x
+        return self.model(x)
 
     def training_step(self, batch, batch_idx):
         """
@@ -95,12 +87,8 @@ class CRNN(pl.LightningModule):
         
         Args:
             batch: Tuple of (inputs, labels)
-                  inputs: Tuple of (audio1, audio2)
-                  labels: 1 for similar pair, 0 for dissimilar pair
         """
-        # print(batch)
         audio, labels = batch
-        
         
         # Forward pass
         y_pred = self(audio)
@@ -111,6 +99,11 @@ class CRNN(pl.LightningModule):
         # Log metrics
         self.log("train_loss", loss, prog_bar=True)
         
+        # Calculate accuracy
+        preds = torch.argmax(y_pred, dim=1)
+        acc = (preds == labels).float().mean()
+        self.log("train_acc", acc, prog_bar=True)
+        
         return loss
 
     def validation_step(self, batch, batch_idx):
@@ -119,8 +112,6 @@ class CRNN(pl.LightningModule):
         
         Args:
             batch: Tuple of (inputs, labels)
-                  inputs: Tuple of (audio1, audio2)
-                  labels: 1 for similar pair, 0 for dissimilar pair
         """
         audio, labels = batch
         
@@ -130,28 +121,25 @@ class CRNN(pl.LightningModule):
         # Calculate loss
         loss = self.loss(y_preds, labels)
         
-        # # Calculate distance
-        # distance = F.pairwise_distance(embeddings1, embeddings2)
-        
-        # # Calculate accuracy (simple threshold-based)
-        # predictions = (distance < 0.5).float()
-        # accuracy = (predictions == labels).float().mean()
+        # Calculate accuracy
+        preds = torch.argmax(y_preds, dim=1)
+        acc = (preds == labels).float().mean()
         
         # Log metrics
         self.log("val_loss", loss, prog_bar=True)
-        # self.log("val_acc", accuracy, prog_bar=True)
+        self.log("val_acc", acc, prog_bar=True)
         
         return loss
 
     def configure_optimizers(self):
         optimizer = optim.Adam(self.parameters(), lr=self.lr)
-        # scheduler = optim.lr_scheduler.ReduceLROnPlateau(
-        #     optimizer, mode='min', factor=0.5, patience=5, verbose=True
-        # )
+        scheduler = optim.lr_scheduler.ReduceLROnPlateau(
+            optimizer, mode='min', factor=0.5, patience=5, verbose=True
+        )
         return {
             "optimizer": optimizer,
-            # "lr_scheduler": scheduler,
-            # "monitor": "val_loss"
+            "lr_scheduler": scheduler,
+            "monitor": "val_loss"
         }
 
 class ResNetMel(pl.LightningModule):
@@ -303,9 +291,13 @@ def create_data():
     #     cache_dir="./mswc_cache"
     # )
     # X = np.expand_dims(X, 1)
-    X = torch.load("./mswc_cache/X.pt", weights_only=True)
+    
+    # X = torch.load("./mswc_cache/X.pt", weights_only=True)
+    # X = X.unsqueeze(1)
+    # y = torch.load("./mswc_cache/y.pt", weights_only=True)
+    X = torch.load("./AI_audios_cache/X.pt", weights_only=True)
     X = X.unsqueeze(1)
-    y = torch.load("./mswc_cache/y.pt", weights_only=True)
+    y = torch.load("./AI_audios_cache/y.pt", weights_only=True)
     print("Shapes: ",X.shape, y.shape)
     # Create dataset and dataloader
     # dataset = AudioMelDataset(X, y)
@@ -337,7 +329,9 @@ def get_dataloaders(batch_size=32):
 def train_model():
     # input_size, hidden_size, output_size = 256, 512, 2
     # Maximum audio duration: 4.14 seconds
-    with open("./mswc_cache/classes.txt", 'r') as f:
+    # with open("./mswc_cache/classes.txt", 'r') as f:
+    #     s = f.read()
+    with open("./AI_audios_cache/classes.txt", 'r') as f:
         s = f.read()
     num_classes = len(s.split("\n"))
     print(f"Num Classes: {num_classes}")
@@ -355,7 +349,7 @@ def train_model():
     #                     enable_progress_bar=True,  # Disable default tqdm ba
     #                     )
     
-    trainer = pl.Trainer(max_epochs=15,
+    trainer = pl.Trainer(max_epochs=25,
                         enable_progress_bar=True,  # Disable default tqdm ba
                         num_nodes=1,
                         enable_checkpointing=True
@@ -365,10 +359,10 @@ def train_model():
 
 
 if __name__ == "__main__":
-    model = train_model()
+    # model = train_model()
     # model = CRNN()
-    # model = ResNetMel()
-    # print(model.named_modules)
+    model = ResNetMel()
+    print(model.named_modules)
     # x = torch.randn((2, 1, 176, 40))
     # out = model(x)
     # print(out)

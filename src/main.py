@@ -12,8 +12,10 @@ from Preprocessing import load_and_preprocess_audio_file, load_and_preprocess_au
 import tensorflow as tf
 from Utils import Matcher
 import torch
-checkpoint_path = "./lightning_logs/version_23/checkpoints/epoch=14-step=46560.ckpt"
 
+checkpoint_path = "./lightning_logs/version_23/checkpoints/epoch=14-step=46560.ckpt"
+# checkpoint_path = "./lightning_logs/version_25/checkpoints/epoch=13-step=44142.ckpt"
+# checkpoint_path = "./lightning_logs/version_26/checkpoints/epoch=24-step=78825.ckpt"
 class SimpleMicStream:
     """Handles real-time audio capture from microphone"""
     def __init__(self, sample_rate: int = 16000, chunk_size: int = 1024):
@@ -66,7 +68,7 @@ class HotwordDetector:
                  reference_file: str,
                  model_path: str,
                  matcher,
-                 threshold: float = 0.50,
+                 threshold: float = 0.5,
                  window_length: float = 1.0):
         self.hotword = hotword
         self.threshold = threshold
@@ -80,6 +82,7 @@ class HotwordDetector:
         # Initialize model
         # self.model = CRNN.load_from_checkpoint(checkpoint_path, num_classes=74).to('cpu')
         self.model = ResNetMel.load_from_checkpoint(checkpoint_path, num_classes=52).to('cpu')
+        # self.model = ResNetMel.load_from_checkpoint(checkpoint_path, num_classes=387).to('cpu')
         self.model.model.fc[4] = torch.nn.Sequential()
         self.model.eval()
         self.matcher = matcher
@@ -119,7 +122,7 @@ class HotwordDetector:
             # print(torch.cosine_similarity(current_embeddings, out1, dim=-1))
             reference_embeddings = torch.tensor(self.reference_embeddings, dtype=torch.float32)
             is_wake_word, confidence = self.matcher.match(current_embeddings, reference_embeddings)
-            print(is_wake_word, confidence)
+            # print(is_wake_word, confidence)
             # noise_level = self.matcher.estimate_noise_level(audio_window)
             
             # is_wake_word, confidence, similarities = self.matcher.is_wake_word(current_embeddings, noise_level)
@@ -176,12 +179,16 @@ def main():
     matcher = Matcher()
     # Initialize detector with your ONNX model path
     wake_word_detector = HotwordDetector(
-        hotword="Nigga",
-        reference_file="path_to_reference.json",  # Contains reference embeddings
-        model_path="./resnet_50_arc/slim_93%_accuracy_72.7390%.onnx",
+        hotword="ALexa",
+        # reference_file="path_to_reference.json",  # Contains reference embeddings
+        # reference_file="Shambu_23thModel.json",
+        reference_file="Alexa_23thModel.json",
+        # reference_file="Munez_25th_Model.json",
+        # model_path="./resnet_50_arc/slim_93%_accuracy_72.7390%.onnx",
+        model_path="ResnetMel",
         matcher=matcher,
         window_length=1.0,
-        threshold=0.5  # Adjust based on your needs
+        threshold=0.65  # Adjust based on your needs
     )
     
     print("no yay here")

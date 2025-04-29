@@ -343,19 +343,23 @@ class AudioAugmentor:
                             noise_files: Optional[List[str]] = None,
                             num_augmentations: int = 2) -> torch.Tensor:
         """Apply multiple random augmentations to an audio sample."""
-        available_augmentations = [
-            self.time_stretch,
-            self.pitch_shift,
-            self.time_shift,
-            self.adjust_volume,
-            self.add_room_simulation,
-            self.spec_augment
-        ]
-        
-        # Add noise augmentation if noise files provided
-        if noise_files and len(noise_files) > 0:
+        # available_augmentations = [
+            # self.time_stretch,
+            # self.pitch_shift,
+            # self.time_shift,
+            # self.adjust_volume,
+            # self.add_room_simulation,
+            # self.spec_augment
+        # ]
+        available_augmentations = []
+        for i in range(len(noise_files)):
             noise_aug = lambda x: self._get_noise_augmentation(x, noise_files)
             available_augmentations.append(noise_aug)
+        
+        # Add noise augmentation if noise files provided
+        # if noise_files and len(noise_files) > 0:
+        #     noise_aug = lambda x: self._get_noise_augmentation(x, noise_files)
+        #     available_augmentations.append(noise_aug)
         
         # Select random augmentations
         selected_augmentations = random.sample(
@@ -418,7 +422,7 @@ def load_audio_sample(file_path: str, target_sr: int = 16000) -> torch.Tensor:
 def augment_dataset(audio_files: List[str], 
                    noise_files: Optional[List[str]] = None,
                    output_dir: str = 'augmented/',
-                   augmentations_per_file: int = 3,
+                   augmentations_per_file: int = 9,
                    sample_rate: int = 16000) -> None:
     """
     Augment an entire dataset of audio files.
@@ -461,11 +465,16 @@ if __name__ == "__main__":
     import glob
     
     # Example usage
-    audio_file = "Chutiya_28ca2041-5dda-42df-8123-f58ea9c3da00_hi.wav"
+    audio_file = "noise_1.wav"
     noise_files = [
         "Noise1.wav",
         "Noise2.wav",
-        # "Noise3.wav"
+        "Noise3.wav",
+        "noise_1.wav",
+        "noise_2.wav",
+        "noise_3.wav",
+        "noise_4.wav",
+        "noise_5.wav",
     ]
     
     # Load audio
@@ -482,7 +491,7 @@ if __name__ == "__main__":
     
     # Process a dataset
     
-    audio_dir = "./Audio_dataset"
+    audio_dir = r"C:\Users\Rohit Francis\Desktop\Codes\Datasets\AI Generated Audios"
     audio_extensions = ['*.wav', '*.mp3', '*.flac', '*.ogg', '*.opus']
     audio_files = []
     labels = []
@@ -501,12 +510,12 @@ if __name__ == "__main__":
             # if class_name == "backward":
             #     print(files)
             labels.extend([class_name] * len(files))
-    
+    # "C:\Users\Rohit Francis\Desktop\Codes\Datasets\AI Generated Audios\Sharanya\Sharanya_fd2ada67-c2d9-4afe-b474-6386b87d8fc3_hi.wav"
     print(f"Found {len(audio_files)} audio files in {len(class_dirs)} classes")
-    
-    
-    audio_files = ["output.wav", "output2.wav", "output3.wav"]
-    augment_dataset(audio_files, noise_files, output_dir="Augmented/")
+    audio_files = audio_files[:audio_files.index(r"C:\Users\Rohit Francis\Desktop\Codes\Datasets\AI Generated Audios\Sharanya\Sharanya_fd2ada67-c2d9-4afe-b474-6386b87d8fc3_hi.wav")]
+    print(audio_files[-1])
+    # audio_files = ["output.wav", "output2.wav", "output3.wav"]
+    augment_dataset(audio_files, noise_files, output_dir="AI_Audios_Augmented/")
 
 # # Here's an example of how to use the toolkit:
 # if __name__ == "__main__":
