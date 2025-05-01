@@ -20,3 +20,5 @@
 /src/AI_Audios_Augmented
 /src/AI_audios_cache
 /src/Artificial_plus_Manual
+/src/downstream_cache
+/src/downstream_models

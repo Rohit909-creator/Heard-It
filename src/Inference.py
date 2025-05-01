@@ -20,8 +20,8 @@ with open("./mswc_cache/classes.txt", 'r') as f:
 #     s = f.read()
 classes = s.split("\n")
 num_classes = len(classes)
-
 checkpoint_path = "./lightning_logs/version_23/checkpoints/epoch=14-step=46560.ckpt"
+# checkpoint_path = "./lightning_logs/version_27/checkpoints/epoch=9-step=31040.ckpt"
 # checkpoint_path = "./lightning_logs/version_25/checkpoints/epoch=13-step=44142.ckpt"
 # checkpoint_path = "./lightning_logs/version_26/checkpoints/epoch=24-step=78825.ckpt"
 # Wakeword only Dataset

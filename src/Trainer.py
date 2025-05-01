@@ -27,7 +27,7 @@ class ResNetMelLite(pl.LightningModule):
             learning_rate (float): Learning rate for optimizer
             pretrained (bool): Whether to use pretrained weights for layers beyond the first conv
         """
-        super(ResNetMel, self).__init__()
+        super(ResNetMelLite, self).__init__()
         self.lr = learning_rate
         self.num_classes = num_classes
         self.mel_bins = mel_bins
@@ -53,15 +53,16 @@ class ResNetMelLite(pl.LightningModule):
             # Average the weights across the 3 input channels to create weights for 1 channel
             new_weights = original_conv1.weight.data.mean(dim=1, keepdim=True)
             self.model.conv1.weight.data = new_weights
-        
+        self.model.layer3 = nn.Sequential()
+        self.model.layer4 = nn.Sequential()
         # Modify the final fully connected layer
         self.model.fc = nn.Sequential(
-            nn.Linear(512, 4096),
+            nn.Linear(128, 1024),
             nn.ReLU(),
             # nn.Dropout(dropout),
-            nn.Linear(4096, 4096),
+            nn.Linear(1024, 1024),
             nn.ReLU(),
-            nn.Linear(4096, num_classes)
+            nn.Linear(1024, num_classes)
         )
         
         # self.model.fc = nn.Sequential(
@@ -292,12 +293,12 @@ def create_data():
     # )
     # X = np.expand_dims(X, 1)
     
-    # X = torch.load("./mswc_cache/X.pt", weights_only=True)
-    # X = X.unsqueeze(1)
-    # y = torch.load("./mswc_cache/y.pt", weights_only=True)
-    X = torch.load("./AI_audios_cache/X.pt", weights_only=True)
+    X = torch.load("./mswc_cache/X.pt", weights_only=True)
     X = X.unsqueeze(1)
-    y = torch.load("./AI_audios_cache/y.pt", weights_only=True)
+    y = torch.load("./mswc_cache/y.pt", weights_only=True)
+    # X = torch.load("./AI_audios_cache/X.pt", weights_only=True)
+    # X = X.unsqueeze(1)
+    # y = torch.load("./AI_audios_cache/y.pt", weights_only=True)
     print("Shapes: ",X.shape, y.shape)
     # Create dataset and dataloader
     # dataset = AudioMelDataset(X, y)
@@ -329,14 +330,14 @@ def get_dataloaders(batch_size=32):
 def train_model():
     # input_size, hidden_size, output_size = 256, 512, 2
     # Maximum audio duration: 4.14 seconds
-    # with open("./mswc_cache/classes.txt", 'r') as f:
-    #     s = f.read()
-    with open("./AI_audios_cache/classes.txt", 'r') as f:
+    with open("./mswc_cache/classes.txt", 'r') as f:
         s = f.read()
+    # with open("./AI_audios_cache/classes.txt", 'r') as f:
+    #     s = f.read()
     num_classes = len(s.split("\n"))
     print(f"Num Classes: {num_classes}")
     # model = CRNN(num_classes=num_classes)
-    model = ResNetMel(num_classes=num_classes, dropout=0.7)
+    model = ResNetMelLite(num_classes=num_classes, dropout=0.7)
     print(model.named_modules)
     train_loader, val_loader = get_dataloaders()
 
@@ -359,10 +360,14 @@ def train_model():
 
 
 if __name__ == "__main__":
-    # model = train_model()
+    model = train_model()
     # model = CRNN()
-    model = ResNetMel()
-    print(model.named_modules)
+    # model = ResNetMel()
+    # print(model.named_modules)
+    # model.model.layer3 = nn.Sequential()
+    # model.model.layer4 = nn.Sequential()
+    # print(model.named_modules)
+    # torch.save(model.state_dict(), "TestModel.pth")
     # x = torch.randn((2, 1, 176, 40))
     # out = model(x)
     # print(out)

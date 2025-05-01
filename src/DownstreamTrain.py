@@ -11,47 +11,247 @@ from pathlib import Path
 from pytorch_lightning.callbacks import ModelCheckpoint
 from typing import Tuple, List, Dict, Optional
 import random
+from sklearn.preprocessing import LabelEncoder
+from tqdm import tqdm
+import pickle
+import json
+from Trainer import ResNetMel
+from Preprocessing import load_and_preprocess_audio_file
 
-# Define the base ResNetMel model (assumed to be available)
-class ResNetMel(nn.Module):
+def preprocess_audio_dataset(
+    audio_dir="./Audio_dataset",
+    contrastive_train_csv="data/contrastive_train.csv",
+    contrastive_val_csv="data/contrastive_val.csv",
+    cache_dir="./audio_cache",
+    sample_rate=16000,
+    n_mels=40,
+    n_fft=1024,
+    hop_length=512,
+    max_duration=1.0,
+    force_recompute=False
+):
+    """
+    Preprocess audio dataset and save as cached tensors
+    
+    Args:
+        audio_dir: Directory containing audio files
+        contrastive_train_csv: CSV file with training pairs
+        contrastive_val_csv: CSV file with validation pairs
+        cache_dir: Directory to save cached tensors
+        sample_rate: Audio sample rate
+        n_mels: Number of mel bands
+        n_fft: FFT size
+        hop_length: Hop length
+        max_duration: Maximum audio duration in seconds
+        force_recompute: Force recomputation of features even if cache exists
+        
+    Returns:
+        Dictionary with paths to cached files
+    """
+    cache_dir = Path(cache_dir)
+    cache_dir.mkdir(exist_ok=True, parents=True)
+    
+    # Cache file paths
+    cache_paths = {
+        "train_specs1": cache_dir / "train_specs1.pt",
+        "train_specs2": cache_dir / "train_specs2.pt",
+        "train_labels": cache_dir / "train_labels.pt",
+        "val_specs1": cache_dir / "val_specs1.pt",
+        "val_specs2": cache_dir / "val_specs2.pt",
+        "val_labels": cache_dir / "val_labels.pt",
+        "metadata": cache_dir / "metadata.json"
+    }
+    
+    # Check if cache exists
+    if not force_recompute and all(path.exists() for path in cache_paths.values()):
+        print("Using cached preprocessed data...")
+        
+        # Load metadata
+        with open(cache_paths["metadata"], 'r') as f:
+            metadata = json.load(f)
+            
+        return cache_paths, metadata
+    
+    print("Preprocessing audio files and creating cache...")
+    
+    # Create mel spectrogram transform
+    mel_spectrogram = torchaudio.transforms.MelSpectrogram(
+        sample_rate=sample_rate,
+        n_fft=n_fft,
+        hop_length=hop_length,
+        n_mels=n_mels
+    )
+    
+    # Process audio function
+    def process_audio_file(file_path):
+        try:
+            # Use default backend - works with most wav files
+            waveform, sr = torchaudio.load(file_path)
+            
+            # Convert to mono if stereo
+            if waveform.shape[0] > 1:
+                waveform = torch.mean(waveform, dim=0, keepdim=True)
+            
+            # Resample if necessary
+            if sr != sample_rate:
+                resampler = torchaudio.transforms.Resample(sr, sample_rate)
+                waveform = resampler(waveform)
+            
+            # Trim or pad to a fixed duration
+            target_length = int(max_duration * sample_rate)
+            if waveform.shape[1] < target_length:
+                # Pad with zeros if audio is shorter
+                padding = target_length - waveform.shape[1]
+                waveform = F.pad(waveform, (0, padding))
+            else:
+                # Trim if audio is longer
+                waveform = waveform[:, :target_length]
+            
+            # Convert to mel spectrogram
+            mel_spec = mel_spectrogram(waveform)
+            # Apply log transformation
+            mel_spec = torch.log(mel_spec + 1e-9)
+            
+            # Normalize
+            mean = mel_spec.mean()
+            std = mel_spec.std()
+            mel_spec = (mel_spec - mean) / (std + 1e-9)
+            
+            # Add channel dimension for CNN input (1, n_mels, time)
+            return mel_spec.unsqueeze(0), True
+            
+        except Exception as e:
+            print(f"Error processing {file_path}: {str(e)}")
+            return None, False
+    
+    # Process audio files and create cache
+    
+    # First, gather all unique file paths from both CSVs
+    audio_files_dict = {}  # file_path -> processed tensor
+    
+    # Load training CSV
+    train_df = pd.read_csv(contrastive_train_csv)
+    # Load validation CSV
+    val_df = pd.read_csv(contrastive_val_csv)
+    
+    # Get all unique file paths
+    all_files = set()
+    audio_dir = Path(audio_dir)
+    
+    for df in [train_df, val_df]:
+        for col in ['audio_path1', 'audio_path2']:
+            if col in df.columns:
+                all_files.update(df[col].tolist())
+    
+    # Process all unique audio files
+    print(f"Processing {len(all_files)} unique audio files...")
+    for file_path in tqdm(all_files):
+        full_path = audio_dir / file_path
+        if full_path.exists():
+            mel_spec, success = process_audio_file(full_path)
+            if success:
+                audio_files_dict[file_path] = mel_spec
+        else:
+            print(f"Warning: File not found: {full_path}")
+    
+    # Create tensor datasets for training
+    print("Creating training tensors...")
+    train_specs1 = []
+    train_specs2 = []
+    train_labels = []
+    
+    valid_rows = 0
+    for idx, row in tqdm(train_df.iterrows(), total=len(train_df)):
+        if row['audio_path1'] in audio_files_dict and row['audio_path2'] in audio_files_dict:
+            train_specs1.append(audio_files_dict[row['audio_path1']])
+            train_specs2.append(audio_files_dict[row['audio_path2']])
+            train_labels.append(float(row['label']))
+            valid_rows += 1
+    
+    if valid_rows == 0:
+        raise ValueError("No valid training pairs found! Check your data paths.")
+    
+    print(f"Found {valid_rows} valid training pairs out of {len(train_df)} total")
+    
+    # Stack tensors
+    train_specs1 = torch.stack(train_specs1)
+    train_specs2 = torch.stack(train_specs2)
+    train_labels = torch.tensor(train_labels)
+    
+    # Create tensor datasets for validation
+    print("Creating validation tensors...")
+    val_specs1 = []
+    val_specs2 = []
+    val_labels = []
+    
+    valid_rows = 0
+    for idx, row in tqdm(val_df.iterrows(), total=len(val_df)):
+        if row['audio_path1'] in audio_files_dict and row['audio_path2'] in audio_files_dict:
+            val_specs1.append(audio_files_dict[row['audio_path1']])
+            val_specs2.append(audio_files_dict[row['audio_path2']])
+            val_labels.append(float(row['label']))
+            valid_rows += 1
+    
+    if valid_rows == 0:
+        raise ValueError("No valid validation pairs found! Check your data paths.")
+    
+    print(f"Found {valid_rows} valid validation pairs out of {len(val_df)} total")
+    
+    # Stack tensors
+    val_specs1 = torch.stack(val_specs1)
+    val_specs2 = torch.stack(val_specs2)
+    val_labels = torch.tensor(val_labels)
+    
+    # Save to cache
+    print("Saving to cache...")
+    torch.save(train_specs1, cache_paths["train_specs1"])
+    torch.save(train_specs2, cache_paths["train_specs2"])
+    torch.save(train_labels, cache_paths["train_labels"])
+    torch.save(val_specs1, cache_paths["val_specs1"])
+    torch.save(val_specs2, cache_paths["val_specs2"])
+    torch.save(val_labels, cache_paths["val_labels"])
+    
+    # Save metadata
+    metadata = {
+        "sample_rate": sample_rate,
+        "n_mels": n_mels,
+        "n_fft": n_fft,
+        "hop_length": hop_length,
+        "max_duration": max_duration,
+        "train_samples": len(train_labels),
+        "val_samples": len(val_labels),
+        "feature_dim": train_specs1.shape[1:] if len(train_specs1) > 0 else None
+    }
+    
+    with open(cache_paths["metadata"], 'w') as f:
+        json.dump(metadata, f)
+    
+    print("Preprocessing complete!")
+    return cache_paths, metadata
+
+
+# Define the base ResNetMel model
+class ResNet(nn.Module):
     def __init__(self, num_classes=10, dropout=0.5):
         super().__init__()
         # This is a placeholder for your actual ResNetMel implementation
         # In practice, you would import your existing model here
-        self.feature_extractor = nn.Sequential(
-            nn.Conv2d(1, 64, kernel_size=7, stride=2, padding=3, bias=False),
-            nn.BatchNorm2d(64),
-            nn.ReLU(inplace=True),
-            nn.MaxPool2d(kernel_size=3, stride=2, padding=1),
-            nn.Conv2d(64, 128, kernel_size=3, stride=1, padding=1, bias=False),
-            nn.BatchNorm2d(128),
-            nn.ReLU(inplace=True),
-            nn.MaxPool2d(kernel_size=2, stride=2),
-            nn.Conv2d(128, 256, kernel_size=3, stride=1, padding=1, bias=False),
-            nn.BatchNorm2d(256),
-            nn.ReLU(inplace=True),
-            nn.MaxPool2d(kernel_size=2, stride=2),
-        )
-        self.avg_pool = nn.AdaptiveAvgPool2d((1, 1))
-        self.flatten = nn.Flatten()
-        self.embedding_size = 256
-        self.fc = nn.Linear(self.embedding_size, num_classes)
-        self.dropout = nn.Dropout(dropout)
-    
+        model = ResNetMel.load_from_checkpoint(checkpoint_path = "./lightning_logs/version_23/checkpoints/epoch=14-step=46560.ckpt", num_classes=52).to('cpu')
+        model.model.fc[4] = nn.Sequential()
+        model.train()
+        self.actual_model = model
+        
     def forward(self, x):
-        x = self.feature_extractor(x)
-        x = self.avg_pool(x)
-        x = self.flatten(x)
-        # self.embedding is the representation before the classifier
+        # print(f"Shape: {x.shape}")
+        if len(x.shape) < 4:
+            x = x.unsqueeze(1)
+            # print(f"After modification: {x.shape}")
+        x = self.actual_model(x)    
         self.embedding = x
-        x = self.dropout(x)
-        x = self.fc(x)
         return x
     
     def get_embedding(self, x):
-        x = self.feature_extractor(x)
-        x = self.avg_pool(x)
-        x = self.flatten(x)
+        x = self.forward(x)
         return x
 
 
@@ -83,142 +283,34 @@ class TripletLoss(nn.Module):
         return loss.mean()
 
 
-# Audio processing utilities
-class AudioProcessor:
-    def __init__(self, sample_rate=16000, n_mels=128, n_fft=1024, hop_length=512):
-        self.sample_rate = sample_rate
-        self.n_mels = n_mels
-        self.n_fft = n_fft
-        self.hop_length = hop_length
-        self.mel_spectrogram = torchaudio.transforms.MelSpectrogram(
-            sample_rate=sample_rate,
-            n_fft=n_fft,
-            hop_length=hop_length,
-            n_mels=n_mels
-        )
-    
-    def process(self, audio_path, duration=3.0):
-        # Load audio file
-        waveform, sr = torchaudio.load(audio_path)
-        # Convert to mono if stereo
-        if waveform.shape[0] > 1:
-            waveform = torch.mean(waveform, dim=0, keepdim=True)
-        
-        # Resample if necessary
-        if sr != self.sample_rate:
-            resampler = torchaudio.transforms.Resample(sr, self.sample_rate)
-            waveform = resampler(waveform)
-        
-        # Trim or pad to a fixed duration
-        target_length = int(duration * self.sample_rate)
-        if waveform.shape[1] < target_length:
-            # Pad with zeros if audio is shorter
-            padding = target_length - waveform.shape[1]
-            waveform = F.pad(waveform, (0, padding))
-        else:
-            # Trim if audio is longer
-            waveform = waveform[:, :target_length]
-        
-        # Convert to mel spectrogram
-        mel_spec = self.mel_spectrogram(waveform)
-        # Apply log transformation
-        mel_spec = torch.log(mel_spec + 1e-9)
-        
-        # Normalize
-        mean = mel_spec.mean()
-        std = mel_spec.std()
-        mel_spec = (mel_spec - mean) / (std + 1e-9)
-        
-        # Add channel dimension for CNN input (1, n_mels, time)
-        return mel_spec.unsqueeze(0)
-
-
-# Dataset for Contrastive Learning (pairs of samples)
-class ContrastiveAudioDataset(Dataset):
-    def __init__(self, data_csv, audio_dir, processor, transform=None):
+# Dataset for Contrastive Learning with cached tensors
+class CachedContrastiveDataset(Dataset):
+    def __init__(self, specs1, specs2, labels, transform=None):
         """
         Args:
-            data_csv: Path to CSV file with columns:
-                - audio_path1: path to first audio file
-                - audio_path2: path to second audio file
-                - label: 1 if same class/similar, 0 if different class/dissimilar
-            audio_dir: Directory where audio files are stored
-            processor: AudioProcessor instance
-            transform: Optional transform to be applied on a sample
+            specs1: Tensor of first spectrograms (N, C, H, W)
+            specs2: Tensor of second spectrograms (N, C, H, W)
+            labels: Tensor of labels (1 for similar, 0 for dissimilar)
+            transform: Optional transform to be applied
         """
-        self.data = pd.read_csv(data_csv)
-        self.audio_dir = Path(audio_dir)
-        self.processor = processor
+        self.specs1 = specs1
+        self.specs2 = specs2
+        self.labels = labels
         self.transform = transform
     
     def __len__(self):
-        return len(self.data)
+        return len(self.labels)
     
     def __getitem__(self, idx):
-        row = self.data.iloc[idx]
+        spec1 = self.specs1[idx]
+        spec2 = self.specs2[idx]
+        label = self.labels[idx]
         
-        # Get paths and label
-        path1 = self.audio_dir / row['audio_path1']
-        path2 = self.audio_dir / row['audio_path2']
-        label = float(row['label'])  # 1 for similar, 0 for dissimilar
-        
-        # Process audio files
-        mel_spec1 = self.processor.process(path1)
-        mel_spec2 = self.processor.process(path2)
-        
-        # Apply transforms if any
         if self.transform:
-            mel_spec1 = self.transform(mel_spec1)
-            mel_spec2 = self.transform(mel_spec2)
+            spec1 = self.transform(spec1)
+            spec2 = self.transform(spec2)
         
-        return {'mel_spec1': mel_spec1, 'mel_spec2': mel_spec2, 'label': torch.tensor(label)}
-
-
-# Dataset for Triplet Learning (anchor, positive, negative samples)
-class TripletAudioDataset(Dataset):
-    def __init__(self, data_csv, audio_dir, processor, transform=None):
-        """
-        Args:
-            data_csv: Path to CSV file with columns:
-                - anchor_path: path to anchor audio file
-                - positive_path: path to positive audio file (same class as anchor)
-                - negative_path: path to negative audio file (different class from anchor)
-            audio_dir: Directory where audio files are stored
-            processor: AudioProcessor instance
-            transform: Optional transform to be applied on a sample
-        """
-        self.data = pd.read_csv(data_csv)
-        self.audio_dir = Path(audio_dir)
-        self.processor = processor
-        self.transform = transform
-    
-    def __len__(self):
-        return len(self.data)
-    
-    def __getitem__(self, idx):
-        row = self.data.iloc[idx]
-        
-        # Get paths
-        anchor_path = self.audio_dir / row['anchor_path']
-        positive_path = self.audio_dir / row['positive_path']
-        negative_path = self.audio_dir / row['negative_path']
-        
-        # Process audio files
-        anchor_spec = self.processor.process(anchor_path)
-        positive_spec = self.processor.process(positive_path)
-        negative_spec = self.processor.process(negative_path)
-        
-        # Apply transforms if any
-        if self.transform:
-            anchor_spec = self.transform(anchor_spec)
-            positive_spec = self.transform(positive_spec)
-            negative_spec = self.transform(negative_spec)
-        
-        return {
-            'anchor': anchor_spec, 
-            'positive': positive_spec, 
-            'negative': negative_spec
-        }
+        return {'mel_spec1': spec1, 'mel_spec2': spec2, 'label': label}
 
 
 # PyTorch Lightning Model
@@ -238,12 +330,9 @@ class AudioSimilarityModel(pl.LightningModule):
         
         # Use provided model or create a new one
         if base_model is None:
-            self.base_model = ResNetMel(num_classes=10, dropout=0.2)
+            self.base_model = ResNet(num_classes=52, dropout=0.7)
         else:
             self.base_model = base_model
-        
-        # Remove the classifier head
-        self.embedding_size = embedding_size
         
         # Define loss functions
         self.contrastive_loss_fn = ContrastiveLoss(margin=contrastive_margin)
@@ -271,66 +360,21 @@ class AudioSimilarityModel(pl.LightningModule):
         
         return loss
     
-    def triplet_step(self, batch):
-        # Unpack batch
-        anchor, positive, negative = batch['anchor'], batch['positive'], batch['negative']
-        
-        # Get embeddings
-        anchor_embedding = self(anchor)
-        positive_embedding = self(positive)
-        negative_embedding = self(negative)
-        
-        # Calculate triplet loss
-        loss = self.triplet_loss_fn(anchor_embedding, positive_embedding, negative_embedding)
-        
+    def training_step(self, batch, batch_idx):
+        # Process contrastive batch
+        loss = self.contrastive_step(batch)
+        self.log('train_contrastive_loss', loss)
+        # Also log the total loss as val_loss for checkpoint monitoring
+        self.log('val_loss', loss)  # This is needed for model checkpointing
         return loss
     
-    def training_step(self, batch, batch_idx):
-        # Determine which loss to use based on batch structure
-        if 'mel_spec1' in batch and 'mel_spec2' in batch and 'label' in batch:
-            # Contrastive loss
-            loss = self.contrastive_step(batch)
-            self.log('train_contrastive_loss', loss)
-            return self.contrastive_weight * loss
-        elif 'anchor' in batch and 'positive' in batch and 'negative' in batch:
-            # Triplet loss
-            loss = self.triplet_step(batch)
-            self.log('train_triplet_loss', loss)
-            return self.triplet_weight * loss
-        else:
-            # If batch contains both types (implemented as a dictionary with both structures)
-            contrastive_loss = self.contrastive_step(batch['contrastive'])
-            triplet_loss = self.triplet_step(batch['triplet'])
-            
-            self.log('train_contrastive_loss', contrastive_loss)
-            self.log('train_triplet_loss', triplet_loss)
-            
-            total_loss = self.contrastive_weight * contrastive_loss + self.triplet_weight * triplet_loss
-            self.log('train_loss', total_loss)
-            
-            return total_loss
-    
     def validation_step(self, batch, batch_idx):
-        # Similar structure to training_step
-        if 'mel_spec1' in batch and 'mel_spec2' in batch and 'label' in batch:
-            loss = self.contrastive_step(batch)
-            self.log('val_contrastive_loss', loss)
-            return loss
-        elif 'anchor' in batch and 'positive' in batch and 'negative' in batch:
-            loss = self.triplet_step(batch)
-            self.log('val_triplet_loss', loss)
-            return loss
-        else:
-            contrastive_loss = self.contrastive_step(batch['contrastive'])
-            triplet_loss = self.triplet_step(batch['triplet'])
-            
-            self.log('val_contrastive_loss', contrastive_loss)
-            self.log('val_triplet_loss', triplet_loss)
-            
-            total_loss = self.contrastive_weight * contrastive_loss + self.triplet_weight * triplet_loss
-            self.log('val_loss', total_loss)
-            
-            return total_loss
+        # Process contrastive batch for validation
+        loss = self.contrastive_step(batch)
+        self.log('val_contrastive_loss', loss)
+        # Also log the val_loss for checkpoint monitoring
+        self.log('val_loss', loss)  # This is needed for model checkpointing
+        return loss
     
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), lr=self.lr)
@@ -344,177 +388,357 @@ class AudioSimilarityModel(pl.LightningModule):
         }
 
 
-# Data module to handle both contrastive and triplet datasets
-class AudioSimilarityDataModule(pl.LightningDataModule):
+# Data module to handle cached datasets
+class CachedAudioSimilarityDataModule(pl.LightningDataModule):
     def __init__(
         self,
-        contrastive_train_csv=None,
-        contrastive_val_csv=None,
-        triplet_train_csv=None,
-        triplet_val_csv=None,
-        audio_dir='./data/audio',
+        train_specs1,
+        train_specs2,
+        train_labels,
+        val_specs1,
+        val_specs2,
+        val_labels,
         batch_size=32,
-        num_workers=4,
-        sample_rate=16000,
-        n_mels=128,
-        duration=3.0
+        num_workers=4
     ):
         super().__init__()
-        self.contrastive_train_csv = contrastive_train_csv
-        self.contrastive_val_csv = contrastive_val_csv
-        self.triplet_train_csv = triplet_train_csv
-        self.triplet_val_csv = triplet_val_csv
-        self.audio_dir = audio_dir
+        self.train_specs1 = train_specs1
+        self.train_specs2 = train_specs2
+        self.train_labels = train_labels
+        self.val_specs1 = val_specs1
+        self.val_specs2 = val_specs2
+        self.val_labels = val_labels
         self.batch_size = batch_size
         self.num_workers = num_workers
         
-        # Create audio processor
-        self.processor = AudioProcessor(
-            sample_rate=sample_rate,
-            n_mels=n_mels
-        )
-        
         # Dataset attributes
-        self.contrastive_train_dataset = None
-        self.contrastive_val_dataset = None
-        self.triplet_train_dataset = None
-        self.triplet_val_dataset = None
+        self.train_dataset = None
+        self.val_dataset = None
     
     def setup(self, stage=None):
         # Create datasets
-        if self.contrastive_train_csv:
-            self.contrastive_train_dataset = ContrastiveAudioDataset(
-                self.contrastive_train_csv, self.audio_dir, self.processor
-            )
+        self.train_dataset = CachedContrastiveDataset(
+            self.train_specs1, self.train_specs2, self.train_labels
+        )
         
-        if self.contrastive_val_csv:
-            self.contrastive_val_dataset = ContrastiveAudioDataset(
-                self.contrastive_val_csv, self.audio_dir, self.processor
-            )
-        
-        if self.triplet_train_csv:
-            self.triplet_train_dataset = TripletAudioDataset(
-                self.triplet_train_csv, self.audio_dir, self.processor
-            )
-        
-        if self.triplet_val_csv:
-            self.triplet_val_dataset = TripletAudioDataset(
-                self.triplet_val_csv, self.audio_dir, self.processor
-            )
+        self.val_dataset = CachedContrastiveDataset(
+            self.val_specs1, self.val_specs2, self.val_labels
+        )
     
     def train_dataloader(self):
-        loaders = []
-        
-        if self.contrastive_train_dataset:
-            loaders.append(DataLoader(
-                self.contrastive_train_dataset,
-                batch_size=self.batch_size,
-                shuffle=True,
-                num_workers=self.num_workers,
-                pin_memory=True
-            ))
-        
-        if self.triplet_train_dataset:
-            loaders.append(DataLoader(
-                self.triplet_train_dataset,
-                batch_size=self.batch_size,
-                shuffle=True,
-                num_workers=self.num_workers,
-                pin_memory=True
-            ))
-        
-        # If both datasets are available, alternate between them
-        if len(loaders) > 1:
-            # Return a combined loader that will cycle through both types
-            # In practice, you might need to implement a custom DataLoader that alternates
-            # between contrastive and triplet batches
-            return loaders[0]  # For now, return just the first one
-        elif len(loaders) == 1:
-            return loaders[0]
-        else:
-            raise ValueError("No training datasets are available")
+        return DataLoader(
+            self.train_dataset,
+            batch_size=self.batch_size,
+            shuffle=True,
+            num_workers=self.num_workers,
+            pin_memory=True,
+            persistent_workers=True if self.num_workers > 0 else False
+        )
     
     def val_dataloader(self):
-        loaders = []
-        
-        if self.contrastive_val_dataset:
-            loaders.append(DataLoader(
-                self.contrastive_val_dataset,
-                batch_size=self.batch_size,
-                shuffle=False,
-                num_workers=self.num_workers,
-                pin_memory=True
-            ))
-        
-        if self.triplet_val_dataset:
-            loaders.append(DataLoader(
-                self.triplet_val_dataset,
-                batch_size=self.batch_size,
-                shuffle=False,
-                num_workers=self.num_workers,
-                pin_memory=True
-            ))
-        
-        # If both datasets are available, return a list of loaders
-        if len(loaders) > 1:
-            return loaders[0]  # For now, return just the first one
-        elif len(loaders) == 1:
-            return loaders[0]
-        else:
-            raise ValueError("No validation datasets are available")
+        return DataLoader(
+            self.val_dataset,
+            batch_size=self.batch_size,
+            shuffle=False,
+            num_workers=self.num_workers,
+            pin_memory=True,
+            persistent_workers=True if self.num_workers > 0 else False
+        )
 
 
-# Example usage
-def train_similarity_model():
-    # Create the model
-    base_model = ResNetMel(num_classes=10, dropout=0.2)
+# Function to create contrastive CSV files if needed
+def create_contrastive_csv_files(
+    audio_dir="./Audio_dataset", 
+    output_dir="./data",
+    train_ratio=0.8,
+    similar_ratio=0.5,
+    min_pairs_per_speaker=5,
+    max_pairs_per_speaker=20
+):
+    """
+    Create contrastive CSV files from an audio directory.
+    Expected structure: audio_dir/speaker_name/audio_files.wav
+    
+    Args:
+        audio_dir: Directory containing audio files
+        output_dir: Directory to save CSV files
+        train_ratio: Ratio of data to use for training
+        similar_ratio: Ratio of similar pairs (same speaker)
+        min_pairs_per_speaker: Minimum pairs per speaker
+        max_pairs_per_speaker: Maximum pairs per speaker
+    """
+    output_dir = Path(output_dir)
+    output_dir.mkdir(exist_ok=True, parents=True)
+    
+    # Output file paths
+    train_csv = output_dir / "contrastive_train.csv"
+    val_csv = output_dir / "contrastive_val.csv"
+    
+    # Check if files already exist
+    if train_csv.exists() and val_csv.exists():
+        print(f"Contrastive CSV files already exist at {train_csv} and {val_csv}")
+        return train_csv, val_csv
+    
+    print("Creating contrastive CSV files...")
+    
+    # Get all audio files by speaker
+    audio_dir = Path(audio_dir)
+    speakers = {}
+    for speaker_dir in audio_dir.iterdir():
+        if speaker_dir.is_dir():
+            speaker_name = speaker_dir.name
+            audio_files = []
+            for audio_file in speaker_dir.glob("*.wav"):
+                rel_path = audio_file.relative_to(audio_dir)
+                audio_files.append(str(rel_path))
+            if audio_files:
+                speakers[speaker_name] = audio_files
+    
+    if not speakers:
+        raise ValueError(f"No audio files found in {audio_dir}")
+    
+    print(f"Found {len(speakers)} speakers")
+    
+    # Create pairs
+    pairs = []
+    
+    # Similar pairs (same speaker)
+    for speaker, files in speakers.items():
+        if len(files) < 2:
+            continue
+        
+        num_pairs = min(max_pairs_per_speaker, len(files) * (len(files) - 1) // 2)
+        num_pairs = max(min_pairs_per_speaker, num_pairs)
+        
+        # Create pairs randomly
+        file_pairs = []
+        for i in range(num_pairs):
+            # Sample without replacement if possible
+            if len(files) >= 2:
+                file1, file2 = random.sample(files, 2)
+            else:
+                # If only one file, use it twice
+                file1 = file2 = files[0]
+            
+            # Create a similar pair
+            file_pairs.append((file1, file2, 1))
+        
+        pairs.extend(file_pairs)
+    
+    # Dissimilar pairs (different speakers)
+    num_similar = len(pairs)
+    num_dissimilar = int(num_similar * (1 - similar_ratio) / similar_ratio)
+    
+    speaker_list = list(speakers.keys())
+    for i in range(num_dissimilar):
+        speaker1, speaker2 = random.sample(speaker_list, 2)
+        
+        # Get random files from each speaker
+        if speakers[speaker1] and speakers[speaker2]:
+            file1 = random.choice(speakers[speaker1])
+            file2 = random.choice(speakers[speaker2])
+            
+            # Create a dissimilar pair
+            pairs.append((file1, file2, 0))
+    
+    # Shuffle pairs
+    random.shuffle(pairs)
+    
+    # Split into train and validation sets
+    split_idx = int(len(pairs) * train_ratio)
+    train_pairs = pairs[:split_idx]
+    val_pairs = pairs[split_idx:]
+    
+    # Save to CSV
+    train_df = pd.DataFrame(train_pairs, columns=['audio_path1', 'audio_path2', 'label'])
+    val_df = pd.DataFrame(val_pairs, columns=['audio_path1', 'audio_path2', 'label'])
+    
+    # Save to disk
+    train_df.to_csv(train_csv, index=False)
+    val_df.to_csv(val_csv, index=False)
+    
+    print(f"Created {len(train_df)} training pairs and {len(val_df)} validation pairs")
+    print(f"Training CSV saved to {train_csv}")
+    print(f"Validation CSV saved to {val_csv}")
+    
+    return train_csv, val_csv
+
+
+# Main function for training
+def train_similarity_model(
+    audio_dir="./Audio_dataset",
+    cache_dir="./audio_cache",
+    output_dir="./models",
+    batch_size=16,
+    num_workers=2,
+    max_epochs=30,
+    lr=0.0001,
+    force_recompute=False
+):
+    # Step 1: Create contrastive CSV files if needed
+    data_dir = Path("./data")
+    data_dir.mkdir(exist_ok=True, parents=True)
+    
+    contrastive_train_csv, contrastive_val_csv = create_contrastive_csv_files(
+        audio_dir=audio_dir,
+        output_dir=data_dir
+    )
+    
+    # Step 2: Preprocess and cache the dataset
+    cache_paths, metadata = preprocess_audio_dataset(
+        audio_dir=audio_dir,
+        contrastive_train_csv=contrastive_train_csv,
+        contrastive_val_csv=contrastive_val_csv,
+        cache_dir=cache_dir,
+        force_recompute=force_recompute
+    )
+    
+    # Print metadata
+    print("Dataset metadata:")
+    for key, value in metadata.items():
+        print(f"  {key}: {value}")
+    
+    # Step 3: Load cached data
+    train_specs1 = torch.load(cache_paths["train_specs1"])
+    train_specs2 = torch.load(cache_paths["train_specs2"])
+    train_specs1 = train_specs1.squeeze(1)
+    train_specs1 = train_specs1.squeeze(1)
+    train_specs1 = train_specs1.transpose(-1, -2)
+    
+    train_specs2 = train_specs2.squeeze(1)
+    train_specs2 = train_specs2.squeeze(1)
+    train_specs2 = train_specs2.transpose(-1, -2)
+    
+    train_labels = torch.load(cache_paths["train_labels"])
+    val_specs1 = torch.load(cache_paths["val_specs1"])
+    val_specs2 = torch.load(cache_paths["val_specs2"])
+    
+    # val_specs1 = val_specs1.squeeze(1)
+    val_specs1 = val_specs1.squeeze(1)
+    val_specs1 = val_specs1.transpose(-1, -2)
+    
+    # val_specs2 = val_specs2.squeeze(1)
+    val_specs2 = val_specs2.squeeze(1)
+    val_specs2 = val_specs2.transpose(-1, -2)
+    
+    val_labels = torch.load(cache_paths["val_labels"])
+    
+    # Step 4: Create model
+    base_model = ResNet(num_classes=52, dropout=0.7)
     model = AudioSimilarityModel(
         base_model=base_model,
         embedding_size=256,
-        contrastive_weight=0.5,
-        triplet_weight=0.5,
+        contrastive_weight=1.0,  # Only using contrastive loss
+        triplet_weight=0.0,      # No triplet loss
         contrastive_margin=1.0,
-        triplet_margin=1.0,
-        lr=0.0001
+        lr=lr
     )
     
-    # Create data module
-    data_module = AudioSimilarityDataModule(
-        contrastive_train_csv='data/contrastive_train.csv',
-        contrastive_val_csv='data/contrastive_val.csv',
-        triplet_train_csv='data/triplet_train.csv',
-        triplet_val_csv='data/triplet_val.csv',
-        audio_dir='data/audio',
-        batch_size=32,
-        num_workers=4
+    # Step 5: Create data module
+    data_module = CachedAudioSimilarityDataModule(
+        train_specs1=train_specs1,
+        train_specs2=train_specs2,
+        train_labels=train_labels,
+        val_specs1=val_specs1,
+        val_specs2=val_specs2,
+        val_labels=val_labels,
+        batch_size=batch_size,
+        num_workers=num_workers
     )
     
-    # Create checkpoint callback
+    # Step 6: Create output directory
+    output_dir = Path(output_dir)
+    output_dir.mkdir(exist_ok=True, parents=True)
+    
+    # Step 7: Create checkpoint callback
     checkpoint_callback = ModelCheckpoint(
+        dirpath=output_dir,
+        filename='similarity-{epoch:02d}-{val_loss:.4f}',
         monitor='val_loss',
         mode='min',
         save_top_k=3,
-        filename='similarity-{epoch:02d}-{val_loss:.4f}',
         save_weights_only=True
     )
     
-    # Create trainer
+    # Step 8: Create trainer
     trainer = pl.Trainer(
-        max_epochs=100,
+        max_epochs=max_epochs,
         accelerator="gpu" if torch.cuda.is_available() else "cpu",
         devices=1,
         callbacks=[checkpoint_callback],
         enable_progress_bar=True,
-        num_nodes=1,
         enable_checkpointing=True
     )
     
-    # Train the model
+    # Step 9: Train model
+    print("Starting training...")
     trainer.fit(model, data_module)
     
-    # Save the final model
-    trainer.save_checkpoint("final_audio_similarity_model.ckpt")
+    # Step 10: Save final model
+    final_path = output_dir / "final_audio_similarity_model.ckpt"
+    trainer.save_checkpoint(final_path)
+    print(f"Training complete! Final model saved to {final_path}")
+    
+    # Return paths to best model and final model
+    return {
+        "best_model": checkpoint_callback.best_model_path,
+        "final_model": final_path
+    }
 
 
 if __name__ == "__main__":
-    train_similarity_model()
+    # temp = torch.load("./mswc_cache/X.pt")
+    # print(temp.shape)
+    
+    # temp = torch.load("./downstream_cache/train_specs1.pt")
+    # print(temp.shape)
+    # temp = temp.squeeze(1)
+    # temp = temp.squeeze(1)
+    # temp = temp.transpose(-1, -2)
+    # print(temp.shape)
+    # # temp = temp.unsqueeze(1)
+    # exit(0)
+    # try:
+    #     # Start training
+    #     model_paths = train_similarity_model(
+    #         audio_dir="./Audio_dataset",
+    #         cache_dir="./downstream_cache",
+    #         output_dir="./downstream_models",
+    #         batch_size=16,
+    #         num_workers=2,
+    #         max_epochs=30,
+    #         lr=0.0001,
+    #         force_recompute=False
+    #     )
+        
+    #     print(f"Best model path: {model_paths['best_model']}")
+    #     print(f"Final model path: {model_paths['final_model']}")
+        
+    # except Exception as e:
+    #     print(f"Error during training: {str(e)}")
+    #     import traceback
+    #     traceback.print_exc()
+    
+    model = AudioSimilarityModel.load_from_checkpoint("./downstream_models/similarity-epoch=16-val_loss=0.0533.ckpt")
+    model.eval()
+    
+    mel_spec = load_and_preprocess_audio_file("./Audios4testing/shambu_2.wav", max_duration=1.0)
+    mel_spec_tensor = torch.tensor([mel_spec], dtype=torch.float32)
+    mel_spec_tensor = mel_spec_tensor.unsqueeze(1)
+    mel_spec_tensor = mel_spec_tensor.cuda()
+    print(mel_spec_tensor.shape)
+
+    mel_spec1 = load_and_preprocess_audio_file("./Audios4testing/shambu_1.wav", max_duration=1.0)
+
+    mel_spec_tensor1 = torch.tensor([mel_spec1], dtype=torch.float32)
+    mel_spec_tensor1 = mel_spec_tensor1.unsqueeze(1)
+    mel_spec_tensor1 = mel_spec_tensor1.cuda()
+    print(mel_spec_tensor1.shape)
+         
+    
+    embs1 = model(mel_spec_tensor)
+    embs2 = model(mel_spec_tensor1)
+    
+    print(f"Embeddings: {embs1.shape}, {embs2.shape}")
+    
+    print(f"Similarity: {torch.cosine_similarity(embs1, embs2)}")

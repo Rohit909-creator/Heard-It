@@ -6,14 +6,15 @@ import time
 from typing import Optional, Dict
 import json
 import os
-from Trainer import ResNetMel
+from Trainer import ResNetMel, ResNetMelLite
 # from Inference import Matcher
 from Preprocessing import load_and_preprocess_audio_file, load_and_preprocess_audio
 import tensorflow as tf
 from Utils import Matcher
 import torch
 
-checkpoint_path = "./lightning_logs/version_23/checkpoints/epoch=14-step=46560.ckpt"
+# checkpoint_path = "./lightning_logs/version_23/checkpoints/epoch=14-step=46560.ckpt"
+checkpoint_path = "./lightning_logs/version_27/checkpoints/epoch=9-step=31040.ckpt"
 # checkpoint_path = "./lightning_logs/version_25/checkpoints/epoch=13-step=44142.ckpt"
 # checkpoint_path = "./lightning_logs/version_26/checkpoints/epoch=24-step=78825.ckpt"
 class SimpleMicStream:
@@ -81,7 +82,8 @@ class HotwordDetector:
         
         # Initialize model
         # self.model = CRNN.load_from_checkpoint(checkpoint_path, num_classes=74).to('cpu')
-        self.model = ResNetMel.load_from_checkpoint(checkpoint_path, num_classes=52).to('cpu')
+        # self.model = ResNetMel.load_from_checkpoint(checkpoint_path, num_classes=52).to('cpu')
+        self.model = ResNetMelLite.load_from_checkpoint(checkpoint_path, num_classes=52).to('cpu')
         # self.model = ResNetMel.load_from_checkpoint(checkpoint_path, num_classes=387).to('cpu')
         self.model.model.fc[4] = torch.nn.Sequential()
         self.model.eval()
@@ -179,16 +181,17 @@ def main():
     matcher = Matcher()
     # Initialize detector with your ONNX model path
     wake_word_detector = HotwordDetector(
-        hotword="ALexa",
+        hotword="Shambu",
         # reference_file="path_to_reference.json",  # Contains reference embeddings
         # reference_file="Shambu_23thModel.json",
-        reference_file="Alexa_23thModel.json",
+        # reference_file="Alexa_23thModel.json",
+        reference_file="./references/Shambu_27thModel_epoch9.json",
         # reference_file="Munez_25th_Model.json",
         # model_path="./resnet_50_arc/slim_93%_accuracy_72.7390%.onnx",
         model_path="ResnetMel",
         matcher=matcher,
         window_length=1.0,
-        threshold=0.65  # Adjust based on your needs
+        threshold=0.75  # Adjust based on your needs
     )
     
     print("no yay here")
