@@ -2,7 +2,7 @@
 
 **Heard-it** is an advanced audio-based wakeword and phrase detection engine designed to not just detect specific hotwords, but also understand **commands** and **phrases**. Built with deep learning at its core, this framework is designed for real-time, on-device audio inference and training.
 
-> 🚧 *This project is a work in progress – with exciting features in development, including customizable classification from rich audio embeddings.*
+> 🚧 *This project is a work in progress – with exciting features in development, including customizable classification from rich audio embeddings. Although there are trial versions of this available here*
 
 ---
 
