@@ -47,6 +47,7 @@ Our goal is to create **rich embeddings** that allow for **custom wakeword** and
 
 - 🎵 **Audio Dataset (Audio_dir/)**: [Audio_dir](https://drive.google.com/file/d/1nt7fNs_OKq5X4Tk-IXCx8ueU8_-Q-f3I/view?usp=sharing)
 - 🧠 **Pretrained Models (lightning_logs/)**: [lightning_logs](https://drive.google.com/drive/folders/1K9Hm2QLoNGrEdXQscS4_aeEHWDdV6Rsd?usp=sharing)
+- 🤏🧠 **Pretrained Models (Mini Model 21Mb/)**: [lightning_logs](https://drive.google.com/drive/folders/1K9Hm2QLoNGrEdXQscS4_aeEHWDdV6Rsd?usp=sharing)
 
 ---
 
