@@ -89,9 +89,9 @@ python Inference.py
 ## 🧪 Sample Use-Case
 
 Detect wakewords like:
-- `"Hey Jarvis"`
-- `"Okay Heard-it"`
-- `"Start recording"`
+- `"Jarvis"`
+- `"Heard-it"`
+- `"Alexa"`
 - Or any **custom phrase** of your choice by using your audio of saying that wakeword as reference!
 
 ---
@@ -102,6 +102,7 @@ Detect wakewords like:
 - [x] Data Augmentation Pipeline
 - [x] Training with ResNet18
 - [x] Custom Wakeword Support from User Input
+- [ ] Custom Phrase detection Support from User Input
 - [ ] Model Quantization for Mobile
 - [ ] Android/iOS Compatibility (TFLite/ONNX export)
 - [ ] Rich Embedding Visualizer
