@@ -10,7 +10,7 @@ from Trainer import ResNetMel, ResNetMelLite
 # from Inference import Matcher
 from Preprocessing import load_and_preprocess_audio_file, load_and_preprocess_audio
 import tensorflow as tf
-from Utils import Matcher
+from Utils import Matcher, EnhancedSimilarityMatcher
 import torch
 
 # checkpoint_path = "./lightning_logs/version_23/checkpoints/epoch=14-step=46560.ckpt"
@@ -123,11 +123,11 @@ class HotwordDetector:
             # Use the matcher to determine if this is a wake word
             # print(torch.cosine_similarity(current_embeddings, out1, dim=-1))
             reference_embeddings = torch.tensor(self.reference_embeddings, dtype=torch.float32)
-            is_wake_word, confidence = self.matcher.match(current_embeddings, reference_embeddings)
+            # is_wake_word, confidence = self.matcher.match(current_embeddings, reference_embeddings)
             # print(is_wake_word, confidence)
-            # noise_level = self.matcher.estimate_noise_level(audio_window)
+            noise_level = self.matcher.estimate_noise_level(audio_window)
             
-            # is_wake_word, confidence, similarities = self.matcher.is_wake_word(current_embeddings, noise_level)
+            is_wake_word, confidence, similarities = self.matcher.is_wake_word(current_embeddings, noise_level)
             
             # Set input tensor
             # interpreter.set_tensor(input_details[0]['index'], 
@@ -173,25 +173,64 @@ def main():
     
     base_dir = "./"
     device = torch.device('cpu')
-    # model = CRNN.load_from_checkpoint(checkpoint_path, num_classes=74).to(device)
+    model = ResNetMelLite.load_from_checkpoint(checkpoint_path, num_classes=52).to('cpu')
+    # self.model = ResNetMel.load_from_checkpoint(checkpoint_path, num_classes=387).to('cpu')
+    model.model.fc[4] = torch.nn.Sequential()
+    model.eval()
     
     # Initialize matcher
     # matcher = EnhancedSimilarityMatcher(positive_embeddings, negative_embeddings)
     print("ya here")
-    matcher = Matcher()
+    # matcher = Matcher()
+    
+    positive_embeddings = []
+    audio_paths = [
+        os.path.join("./Audios4testing/alexa_1.wav"),
+        os.path.join("./Audios4testing/alexa_2.wav"),
+        os.path.join("./Audios4testing/alexa_3.wav"),
+        os.path.join("./Audios4testing/alexa_4.wav"),
+        os.path.join("./Audios4testing/alexa_5.wav")
+    ]
+    for path in audio_paths:
+        mel_spec = load_and_preprocess_audio_file(path, max_duration=1.0)
+        mel_spec_tensor = torch.tensor([mel_spec], dtype=torch.float32)
+        mel_spec_tensor = mel_spec_tensor.unsqueeze(1)
+        embs = model(mel_spec_tensor)
+        # print(embs.dtype)
+        positive_embeddings.append(embs)
+        
+    
+    negative_embeddings = []
+    audio_paths = [
+        os.path.join("./Audios4testing/munez_2.wav"),
+        os.path.join("./Audios4testing/munez_3.wav"),
+        os.path.join("./Audios4testing/shambu_1.wav"),
+        os.path.join("./Audios4testing/shambu_2.wav"),
+        os.path.join("./Audios4testing/shiva_1.wav"),
+        os.path.join("./Audios4testing/shiva_2.wav"),
+    ]
+    for path in audio_paths:
+        mel_spec = load_and_preprocess_audio_file(path, max_duration=1.0)
+        mel_spec_tensor = torch.tensor([mel_spec], dtype=torch.float32)
+        mel_spec_tensor = mel_spec_tensor.unsqueeze(1)
+        embs = model(mel_spec_tensor)
+        negative_embeddings.append(embs)
+        
+        
+    matcher = EnhancedSimilarityMatcher(positive_embeddings, negative_embeddings)
     # Initialize detector with your ONNX model path
     wake_word_detector = HotwordDetector(
         hotword="Shambu",
         # reference_file="path_to_reference.json",  # Contains reference embeddings
         # reference_file="Shambu_23thModel.json",
         # reference_file="Alexa_23thModel.json",
-        reference_file="./references/Shambu_27thModel_epoch9.json",
+        reference_file="./references/Alexa_27thModel_epoch9.json",
         # reference_file="Munez_25th_Model.json",
         # model_path="./resnet_50_arc/slim_93%_accuracy_72.7390%.onnx",
         model_path="ResnetMel",
         matcher=matcher,
         window_length=1.0,
-        threshold=0.75  # Adjust based on your needs
+        threshold=0.70  # Adjust based on your needs
     )
     
     print("no yay here")

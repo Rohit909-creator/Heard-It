@@ -105,6 +105,14 @@ class EnhancedSimilarityMatcher:
             'negative': 0.20,    # Increase from 0.10 to 0.20 - put more weight on negative examples
             'std': 0.05          # Increase from 0.03 to 0.05 - be more strict about standard deviation
         }
+        
+        weights = {
+            'cosine': 0.40,      # Slightly reduce cosine weight as it might be too sensitive
+            'avg_pos': 0.30,     # Reduce slightly to balance
+            'gaussian': 0.10,    # Reduce as it may be too forgiving with variations
+            'negative': 0.35,    # Increase substantially to better penalize non-matches
+            'std': 0.15          # Triple this to be much stricter about standard deviation
+        }
 
         # Adjust the noise level handling
         if noise_level > 0.3:

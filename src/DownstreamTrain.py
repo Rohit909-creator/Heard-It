@@ -719,16 +719,18 @@ if __name__ == "__main__":
     #     import traceback
     #     traceback.print_exc()
     
-    model = AudioSimilarityModel.load_from_checkpoint("./downstream_models/similarity-epoch=16-val_loss=0.0533.ckpt")
+    
+    # Testing
+    model = AudioSimilarityModel.load_from_checkpoint("./downstream_models/similarity-epoch=10-val_loss=0.1074.ckpt")
     model.eval()
     
-    mel_spec = load_and_preprocess_audio_file("./Audios4testing/shambu_2.wav", max_duration=1.0)
+    mel_spec = load_and_preprocess_audio_file("./Audios4testing/sam_2.wav", max_duration=1.0)
     mel_spec_tensor = torch.tensor([mel_spec], dtype=torch.float32)
     mel_spec_tensor = mel_spec_tensor.unsqueeze(1)
     mel_spec_tensor = mel_spec_tensor.cuda()
     print(mel_spec_tensor.shape)
 
-    mel_spec1 = load_and_preprocess_audio_file("./Audios4testing/shambu_1.wav", max_duration=1.0)
+    mel_spec1 = load_and_preprocess_audio_file("./Audios4testing/sam_1.wav", max_duration=1.0)
 
     mel_spec_tensor1 = torch.tensor([mel_spec1], dtype=torch.float32)
     mel_spec_tensor1 = mel_spec_tensor1.unsqueeze(1)
