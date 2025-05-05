@@ -184,12 +184,20 @@ def main():
     # matcher = Matcher()
     
     positive_embeddings = []
+    # audio_paths = [
+    #     os.path.join("./Audios4testing/alexa_1.wav"),
+    #     os.path.join("./Audios4testing/alexa_2.wav"),
+    #     os.path.join("./Audios4testing/alexa_3.wav"),
+    #     os.path.join("./Audios4testing/alexa_4.wav"),
+    #     os.path.join("./Audios4testing/alexa_5.wav")
+    # ]
+    
     audio_paths = [
-        os.path.join("./Audios4testing/alexa_1.wav"),
-        os.path.join("./Audios4testing/alexa_2.wav"),
-        os.path.join("./Audios4testing/alexa_3.wav"),
-        os.path.join("./Audios4testing/alexa_4.wav"),
-        os.path.join("./Audios4testing/alexa_5.wav")
+        os.path.join("./Audios4testing/shiva_1.wav"),
+        os.path.join("./Audios4testing/shiva_2.wav"),
+        os.path.join("./Audios4testing/shiva_3.wav"),
+        # os.path.join("./Audios4testing/alexa_4.wav"),
+        # os.path.join("./Audios4testing/alexa_5.wav")
     ]
     for path in audio_paths:
         mel_spec = load_and_preprocess_audio_file(path, max_duration=1.0)
@@ -202,12 +210,12 @@ def main():
     
     negative_embeddings = []
     audio_paths = [
-        os.path.join("./Audios4testing/munez_2.wav"),
-        os.path.join("./Audios4testing/munez_3.wav"),
-        os.path.join("./Audios4testing/shambu_1.wav"),
-        os.path.join("./Audios4testing/shambu_2.wav"),
-        os.path.join("./Audios4testing/shiva_1.wav"),
-        os.path.join("./Audios4testing/shiva_2.wav"),
+        os.path.join("./Audios4testing/Thunderbolt_en-AU-jimm.mp3"),
+        os.path.join("./Audios4testing/Thunderbolt_en-AU-kylie.mp3"),
+        os.path.join("./Audios4testing/Skywalker_en-AU-jimm.mp3"),
+        os.path.join("./Audios4testing/Skywalker_en-AU-kylie.mp3"),
+        os.path.join("./Audios4testing/Hello0.mp3"),
+        os.path.join("./Audios4testing/Hello1.mp3"),
     ]
     for path in audio_paths:
         mel_spec = load_and_preprocess_audio_file(path, max_duration=1.0)
@@ -224,7 +232,7 @@ def main():
         # reference_file="path_to_reference.json",  # Contains reference embeddings
         # reference_file="Shambu_23thModel.json",
         # reference_file="Alexa_23thModel.json",
-        reference_file="./references/Alexa_27thModel_epoch9.json",
+        reference_file="./references/Shambu_27thModel_epoch9.json",
         # reference_file="Munez_25th_Model.json",
         # model_path="./resnet_50_arc/slim_93%_accuracy_72.7390%.onnx",
         model_path="ResnetMel",

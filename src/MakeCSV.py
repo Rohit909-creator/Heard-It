@@ -6,7 +6,7 @@ import argparse
 from sklearn.model_selection import train_test_split
 from tqdm import tqdm
 
-def find_audio_files(base_dir, extensions=('.wav', '.mp3', '.flac', '.ogg')):
+def find_audio_files(base_dir, extensions=('.wav', '.mp3', '.flac', '.ogg', ".opus")):
     """
     Find all audio files in the directory structure and organize them by class.
     
@@ -154,10 +154,10 @@ def main():
     # Find audio files by class
     # print(f"Scanning audio files in {args.audio_dir}...")
     
-    print(f"Scanning audio files in {'./Audio_dataset'}...")
+    print(f"Scanning audio files in {'./Audio_dataset2'}...")
     # audio_files_by_class = find_audio_files(args.audio_dir)
     
-    audio_files_by_class = find_audio_files("./Audio_dataset")
+    audio_files_by_class = find_audio_files("./Audio_dataset2")
     
     # Check if we found any files
     if not audio_files_by_class:
@@ -173,7 +173,7 @@ def main():
     pairs = generate_contrastive_pairs(
         audio_files_by_class, 
         num_pairs_per_class=100, 
-        same_ratio=0.5
+        same_ratio=0.4
     )
     
     # Create train/val split and save to CSV

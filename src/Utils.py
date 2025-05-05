@@ -97,14 +97,14 @@ class EnhancedSimilarityMatcher:
             np.abs(query_embedding - self.positive_centroid) > 2 * self.positive_std
         )
         
-        # ADJUSTED WEIGHTS based on test results analysis
-        weights = {
-            'cosine': 0.45,      # Keep this as is - it's a strong indicator
-            'avg_pos': 0.35,     # Keep this as is - it's helpful for faint voices
-            'gaussian': 0.15,    # Keep this as is
-            'negative': 0.20,    # Increase from 0.10 to 0.20 - put more weight on negative examples
-            'std': 0.05          # Increase from 0.03 to 0.05 - be more strict about standard deviation
-        }
+        # # ADJUSTED WEIGHTS based on test results analysis
+        # weights = {
+        #     'cosine': 0.45,      # Keep this as is - it's a strong indicator
+        #     'avg_pos': 0.35,     # Keep this as is - it's helpful for faint voices
+        #     'gaussian': 0.15,    # Keep this as is
+        #     'negative': 0.20,    # Increase from 0.10 to 0.20 - put more weight on negative examples
+        #     'std': 0.05          # Increase from 0.03 to 0.05 - be more strict about standard deviation
+        # }
         
         weights = {
             'cosine': 0.40,      # Slightly reduce cosine weight as it might be too sensitive
@@ -115,11 +115,20 @@ class EnhancedSimilarityMatcher:
         }
 
         # Adjust the noise level handling
+        # if noise_level > 0.3:
+        #     weights['gaussian'] += 0.05
+        #     weights['cosine'] -= 0.02
+        #     weights['avg_pos'] -= 0.01
+        #     weights['std'] -= 0.01  # Less reduction in std penalty (from -0.02)
+
+        # Adjust the noise level handling
         if noise_level > 0.3:
-            weights['gaussian'] += 0.05
+            weights['gaussian'] += 0.03  # Reduced from 0.05
             weights['cosine'] -= 0.02
             weights['avg_pos'] -= 0.01
-            weights['std'] -= 0.01  # Less reduction in std penalty (from -0.02)
+            weights['negative'] += 0.03  # Add this line to increase negative penalty in noisy environments
+            weights['std'] -= 0.01
+
 
         # Modify the faint voice detection logic
         if cosine_sim < 0.25 and cosine_sim > 0.08:  # Increase lower bound from 0.05 to 0.08

@@ -6,7 +6,7 @@ import argparse
 from sklearn.model_selection import train_test_split
 from tqdm import tqdm
 
-def find_audio_files(base_dir, extensions=('.wav', '.mp3', '.flac', '.ogg')):
+def find_audio_files(base_dir, extensions=('.wav', '.mp3', '.flac', '.ogg', '.opus')):
     """
     Find all audio files in the directory structure and organize them by class.
     
@@ -141,8 +141,8 @@ def main():
     os.makedirs("./data", exist_ok=True)
     
     # Find audio files by class
-    print(f"Scanning audio files in {'./Audio_dataset'}...")
-    audio_files_by_class = find_audio_files('./Audio_dataset')
+    print(f"Scanning audio files in {'./Audio_dataset2'}...")
+    audio_files_by_class = find_audio_files('./Audio_dataset2')
     
     # Check if we found any files
     if not audio_files_by_class:

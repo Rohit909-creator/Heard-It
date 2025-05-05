@@ -19,7 +19,7 @@ from Trainer import ResNetMel
 from Preprocessing import load_and_preprocess_audio_file
 
 def preprocess_audio_dataset(
-    audio_dir="./Audio_dataset",
+    audio_dir="./Audio_dataset2",
     contrastive_train_csv="data/contrastive_train.csv",
     contrastive_val_csv="data/contrastive_val.csv",
     cache_dir="./audio_cache",
@@ -448,7 +448,7 @@ class CachedAudioSimilarityDataModule(pl.LightningDataModule):
 
 # Function to create contrastive CSV files if needed
 def create_contrastive_csv_files(
-    audio_dir="./Audio_dataset", 
+    audio_dir="./Audio_dataset2", 
     output_dir="./data",
     train_ratio=0.8,
     similar_ratio=0.5,
@@ -566,7 +566,7 @@ def create_contrastive_csv_files(
 
 # Main function for training
 def train_similarity_model(
-    audio_dir="./Audio_dataset",
+    audio_dir="./Audio_dataset2",
     cache_dir="./audio_cache",
     output_dir="./models",
     batch_size=16,
@@ -701,12 +701,12 @@ if __name__ == "__main__":
     # try:
     #     # Start training
     #     model_paths = train_similarity_model(
-    #         audio_dir="./Audio_dataset",
+    #         audio_dir="./Audio_dataset2",
     #         cache_dir="./downstream_cache",
     #         output_dir="./downstream_models",
-    #         batch_size=16,
+    #         batch_size=32,
     #         num_workers=2,
-    #         max_epochs=30,
+    #         max_epochs=50,
     #         lr=0.0001,
     #         force_recompute=False
     #     )
@@ -721,16 +721,17 @@ if __name__ == "__main__":
     
     
     # Testing
-    model = AudioSimilarityModel.load_from_checkpoint("./downstream_models/similarity-epoch=10-val_loss=0.1074.ckpt")
+    # downstream_models\similarity-epoch=14-val_loss=0.1535.ckpt
+    model = AudioSimilarityModel.load_from_checkpoint("./downstream_models/final_audio_similarity_model.ckpt").cuda()
     model.eval()
     
-    mel_spec = load_and_preprocess_audio_file("./Audios4testing/sam_2.wav", max_duration=1.0)
+    mel_spec = load_and_preprocess_audio_file("./Audios4testing/shivan_1.wav", max_duration=1.0)
     mel_spec_tensor = torch.tensor([mel_spec], dtype=torch.float32)
     mel_spec_tensor = mel_spec_tensor.unsqueeze(1)
     mel_spec_tensor = mel_spec_tensor.cuda()
     print(mel_spec_tensor.shape)
 
-    mel_spec1 = load_and_preprocess_audio_file("./Audios4testing/sam_1.wav", max_duration=1.0)
+    mel_spec1 = load_and_preprocess_audio_file("./Audios4testing/shivan_2.wav", max_duration=1.0)
 
     mel_spec_tensor1 = torch.tensor([mel_spec1], dtype=torch.float32)
     mel_spec_tensor1 = mel_spec_tensor1.unsqueeze(1)
