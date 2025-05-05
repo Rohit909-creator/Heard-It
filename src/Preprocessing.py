@@ -350,13 +350,13 @@ def save_files2folders(audio_dir:str):
 if __name__ == "__main__":
     
     # Preprocess the dataset
-    # X, y, label_encoder, max_length, max_duration = preprocess_audio_dataset(
-    #     audio_dir="./Artificial_plus_manual", 
-    #     cache_dir="./AI_audios_cache",
-    #     max_duration=1.0
-    # )
+    X, y, label_encoder, max_length, max_duration = preprocess_audio_dataset(
+        audio_dir="./Audio_dataset3", 
+        cache_dir="./mswc3_cache",
+        max_duration=1.0
+    )
     
-    # print(X.shape, y.shape)
+    print(X.shape, y.shape)
 
     # # Create dataset and dataloader
     # dataset = AudioMelDataset(X, y)
@@ -375,5 +375,5 @@ if __name__ == "__main__":
     # audio_dir = r"C:\Users\Rohit Francis\Desktop\Codes\Datasets\AI Generated Audios"
     # audio_truncate(audio_dir)
     
-    audio_dir = "./AI_Audios_Augmented"
-    save_files2folders(audio_dir)
+    # audio_dir = "./AI_Audios_Augmented"
+    # save_files2folders(audio_dir)

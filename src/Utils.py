@@ -238,7 +238,7 @@ class EnhancedSimilarityMatcher:
         
         # Print results table
         headers = ["File", "Confidence", "Detection", "Cosine", "Avg Pos", "Gaussian", "Neg Penalty", "Std Penalty", "Noise Level"]
-        tabulate(headers, results)
+        # tabulate(headers, results)
         
         # Print statistics
         detections = sum(1 for r in results if r[2] == "✓")

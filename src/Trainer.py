@@ -293,9 +293,9 @@ def create_data():
     # )
     # X = np.expand_dims(X, 1)
     
-    X = torch.load("./mswc_cache/X.pt", weights_only=True)
+    X = torch.load("./mswc3_cache/X.pt", weights_only=True)
     X = X.unsqueeze(1)
-    y = torch.load("./mswc_cache/y.pt", weights_only=True)
+    y = torch.load("./mswc3_cache/y.pt", weights_only=True)
     # X = torch.load("./AI_audios_cache/X.pt", weights_only=True)
     # X = X.unsqueeze(1)
     # y = torch.load("./AI_audios_cache/y.pt", weights_only=True)
@@ -330,7 +330,7 @@ def get_dataloaders(batch_size=32):
 def train_model():
     # input_size, hidden_size, output_size = 256, 512, 2
     # Maximum audio duration: 4.14 seconds
-    with open("./mswc_cache/classes.txt", 'r') as f:
+    with open("./mswc3_cache/classes.txt", 'r') as f:
         s = f.read()
     # with open("./AI_audios_cache/classes.txt", 'r') as f:
     #     s = f.read()
@@ -350,7 +350,7 @@ def train_model():
     #                     enable_progress_bar=True,  # Disable default tqdm ba
     #                     )
     
-    trainer = pl.Trainer(max_epochs=25,
+    trainer = pl.Trainer(max_epochs=15,
                         enable_progress_bar=True,  # Disable default tqdm ba
                         num_nodes=1,
                         enable_checkpointing=True

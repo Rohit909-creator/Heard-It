@@ -56,8 +56,8 @@ Our goal is to create **rich embeddings** that allow for **custom wakeword** and
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/yourusername/heard-it.git
-cd heard-it/src/
+git clone https://github.com/Rohit909-creator/Heard-It
+cd Heard-It/src/
 ```
 
 ### 2. Install Dependencies
@@ -81,7 +81,7 @@ python Trainer.py
 ### 5. Run Inference
 
 ```bash
-python Inference.py
+python Inference2.py
 ```
 
 ---

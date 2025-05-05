@@ -129,21 +129,6 @@ class HotwordDetector:
             
             is_wake_word, confidence, similarities = self.matcher.is_wake_word(current_embeddings, noise_level)
             
-            # Set input tensor
-            # interpreter.set_tensor(input_details[0]['index'], 
-            #                     tf.reshape(current_embeddings, [1, -1]).numpy())
-            # interpreter.set_tensor(input_details[1]['index'], 
-            #                     np.array(noise_level, dtype=np.float32))
-            
-            # # # Run inference
-            # interpreter.invoke()
-            
-            # # # Get output tensor
-            # tflite_is_wake = interpreter.get_tensor(output_details[0]['index'])
-            # tflite_score = interpreter.get_tensor(output_details[1]['index'])
-            
-            # # print(f"TFLite model output - Is wake word: {tflite_is_wake}, Score: {tflite_score}")
-            
             
             
             # Trim buffer to prevent memory growth
@@ -156,13 +141,6 @@ class HotwordDetector:
                     "confidence": float(confidence),
                     # "similarities": similarities
                 }
-            
-            # if tflite_is_wake and tflite_score >= self.threshold:
-            #     return {
-            #         "match": True,
-            #         "confidence": float(tflite_score),
-            #         "similarities": tflite_score
-            #     }
                 
         return {"match": False, "confidence": 0.0, "similarities": {}}
 
@@ -186,8 +164,10 @@ def main():
     positive_embeddings = []
     
     name = input(f"{Fore.BLUE}Enter the wakeword name you want to use{Style.RESET_ALL}({Fore.GREEN}shiva, shivan, shambu, alexa, sam, munez, nigga{Style.RESET_ALL}): ")
-    
-    audio_file_paths = fetch_audios(name)
+    if name == "alexa":
+        audio_file_paths = fetch_audios(name)[:3]
+    else:
+        audio_file_paths = fetch_audios(name)
     print(f"{Fore.GREEN}Audio files fetched are: {audio_file_paths}{Style.RESET_ALL}")
     
     # audio_paths = [
@@ -214,6 +194,9 @@ def main():
         os.path.join("./Audios4testing/Skywalker_en-AU-kylie.mp3"),
         os.path.join("./Audios4testing/Hello0.mp3"),
         os.path.join("./Audios4testing/Hello1.mp3"),
+        os.path.join("./Audios4testing/Augh.wav"),
+        os.path.join("./Audios4testing/Augh2.wav"),
+        os.path.join("./Audios4testing/Ummmm.wav"),
     ]
     for path in audio_paths:
         mel_spec = load_and_preprocess_audio_file(path, max_duration=1.0)
@@ -237,6 +220,7 @@ def main():
         matcher=matcher,
         window_length=1.0,
         threshold=0.70  # Adjust based on your needs
+        # threshold=0.79239375
     )
     
     print("no yay here")
