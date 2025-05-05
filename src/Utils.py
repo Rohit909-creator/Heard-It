@@ -5,6 +5,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 from scipy.stats import norm
 from colorama import Fore, Style
 import torch
+from fuzzywuzzy import process
 
 class EnhancedSimilarityMatcher:
     def __init__(self, positive_embeddings, negative_embeddings=None, noise_levels=None):
@@ -279,3 +280,23 @@ class Matcher:
             is_wake=False
             
         return is_wake, probs[0].item()
+
+
+def fetch_audios(name:str):
+    
+    audio_files = os.listdir("./Audios4testing")
+    # print(audio_files)
+    best_ones = process.extractBests(name, audio_files)
+    # print(best_ones)
+    apt_ones = [os.path.join("./Audios4testing", filename) for filename, score in best_ones if score >=90]
+    
+    return apt_ones
+    
+if __name__ == "__main__":
+    import librosa
+    
+    selected_audio_files = fetch_audios("Shiva")
+    
+    for audio_path in selected_audio_files:
+        audio, sr = librosa.load(audio_path)
+        print(audio.shape)
