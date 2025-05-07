@@ -13,25 +13,8 @@ import tensorflow as tf
 from Utils import Matcher, EnhancedSimilarityMatcher, fetch_audios
 import torch
 from colorama import Fore, Style
-# checkpoint_path = "./lightning_logs/version_23/checkpoints/epoch=14-step=46560.ckpt"
-# checkpoint_path = "./lightning_logs/version_27/checkpoints/epoch=9-step=31040.ckpt"
-# checkpoint_path = "./lightning_logs/version_27/checkpoints/epoch=14-step=46560.ckpt"
-# checkpoint_path = "./lightning_logs/version_25/checkpoints/epoch=13-step=44142.ckpt"
-# checkpoint_path = "./lightning_logs/version_26/checkpoints/epoch=24-step=78825.ckpt"
-
-# 269 classes model
-# checkpoint_path = "./lightning_logs/version_29/checkpoints/epoch=9-step=34120.ckpt"
-# checkpoint_path = "./lightning_logs/version_29/checkpoints/epoch=6-step=23884.ckpt"
-# checkpoint_path = "./lightning_logs/version_29/checkpoints/epoch=9-step=34120.ckpt"
-# checkpoint_path = "./lightning_logs/version_30/checkpoints/epoch=19-step=68240.ckpt"
-# classes_path = "./mswc3_cache/classes.txt"
 
 # 123 classes version stable one
-# checkpoint_path = "./lightning_logs/version_31/checkpoints/epoch=9-step=113670.ckpt"
-# checkpoint_path = "./lightning_logs/version_31/checkpoints/epoch=11-step=136404.ckpt"
-# checkpoint_path = "./lightning_logs/version_33/checkpoints/epoch=12-step=147771.ckpt"
-# checkpoint_path = "./lightning_logs/version_33/checkpoints/epoch=16-step=193239.ckpt"
-# checkpoint_path = "./lightning_logs/version_33/checkpoints/epoch=19-step=227340.ckpt"
 checkpoint_path = "./lightning_logs/version_33/checkpoints/epoch=24-step=284175.ckpt"
 
 class SimpleMicStream:
@@ -98,14 +81,7 @@ class HotwordDetector:
         self.reference_embeddings = self._load_reference_embeddings(reference_file)
         
         # Initialize model
-        # self.model = CRNN.load_from_checkpoint(checkpoint_path, num_classes=74).to('cpu')
-        # self.model = ResNetMel.load_from_checkpoint(checkpoint_path, num_classes=52).to('cpu')
         self.model = ResNetMelLite.load_from_checkpoint(checkpoint_path, num_classes=123).to('cpu')
-        # self.model = ResNetMel.load_from_checkpoint(checkpoint_path, num_classes=387).to('cpu')
-        
-        
-        # 269 class version 
-        # self.model = ResNetMelLite.load_from_checkpoint(checkpoint_path, num_classes=269).to('cpu')
         
         self.model.model.fc[4] = torch.nn.Sequential()
         self.model.eval()
@@ -140,18 +116,10 @@ class HotwordDetector:
             # print(mel_spec_tensor.shape)
             current_embeddings = self.model(mel_spec_tensor)
             # Get embeddings for current audio
-            # current_embeddings = self.model(mel_spec)
-            # current_embeddings = current_embeddings.squeeze().detach().numpy()
-            # Use the matcher to determine if this is a wake word
-            # print(torch.cosine_similarity(current_embeddings, out1, dim=-1))
             reference_embeddings = torch.tensor(self.reference_embeddings, dtype=torch.float32)
-            # is_wake_word, confidence = self.matcher.match(current_embeddings, reference_embeddings)
-            # print(is_wake_word, confidence)
             noise_level = self.matcher.estimate_noise_level(audio_window)
             
             is_wake_word, confidence, similarities = self.matcher.is_wake_word(current_embeddings, noise_level)
-            
-            
             
             # Trim buffer to prevent memory growth
             self.audio_buffer = self.audio_buffer[-self.window_samples:]
@@ -171,25 +139,13 @@ def main():
     import librosa
     from colorama import Fore, Style
     
-    # with open(classes_path, "r") as f:
-    #     s = f.read()
-    # num_classes = len(s.split("/n"))
-    
     base_dir = "./"
     device = torch.device('cpu')
     
     model = ResNetMelLite.load_from_checkpoint(checkpoint_path, num_classes=123).to('cpu')
     
-    # 269 class version
-    # model = ResNetMelLite.load_from_checkpoint(checkpoint_path, num_classes=269).to('cpu')
-    # self.model = ResNetMel.load_from_checkpoint(checkpoint_path, num_classes=387).to('cpu')
     model.model.fc[4] = torch.nn.Sequential()
     model.eval()
-    
-    # Initialize matcher
-    # matcher = EnhancedSimilarityMatcher(positive_embeddings, negative_embeddings)
-    print("ya here")
-    # matcher = Matcher()
     
     positive_embeddings = []
     
@@ -202,13 +158,7 @@ def main():
         audio_file_paths = fetch_audios(name)
     print(f"{Fore.GREEN}Audio files fetched are: {audio_file_paths}{Style.RESET_ALL}")
     
-    # audio_paths = [
-    #     os.path.join("./Audios4testing/shiva_1.wav"),
-    #     os.path.join("./Audios4testing/shiva_2.wav"),
-    #     os.path.join("./Audios4testing/shiva_3.wav"),
-    #     # os.path.join("./Audios4testing/alexa_4.wav"),
-    #     # os.path.join("./Audios4testing/alexa_5.wav")
-    # ]
+    
     for path in audio_file_paths:
         mel_spec = load_and_preprocess_audio_file(path, max_duration=1.0)
         mel_spec_tensor = torch.tensor([mel_spec], dtype=torch.float32)
@@ -226,13 +176,7 @@ def main():
         os.path.join("./Audios4testing/Skywalker_en-AU-kylie.mp3"),
         os.path.join("./Audios4testing/Hello0.mp3"),
         os.path.join("./Audios4testing/Hello1.mp3"),
-        # os.path.join("./Audios4testing/Augh.wav"),
-        # os.path.join("./Audios4testing/Augh2.wav"),
-        # os.path.join("./Audios4testing/Ummmm.wav"),
-        # os.path.join("./Audios4testing/Aahuhuhaah.wav"),
-        # os.path.join("./Audios4testing/blah.wav"),
-        # os.path.join("./Audios4testing/tap.wav"),
-        # os.path.join("./Audios4testing/taptaptap.wav"),
+        
     ]
     for path in audio_paths:
         mel_spec = load_and_preprocess_audio_file(path, max_duration=1.0)
@@ -246,12 +190,8 @@ def main():
     # Initialize detector with your ONNX model path
     wake_word_detector = HotwordDetector(
         hotword=name,
-        # reference_file="path_to_reference.json",  # Contains reference embeddings
-        # reference_file="Shambu_23thModel.json",
-        # reference_file="Alexa_23thModel.json",
         reference_file=f"./references/Shambu_27thModel_epoch9.json",
-        # reference_file="Munez_25th_Model.json",
-        # model_path="./resnet_50_arc/slim_93%_accuracy_72.7390%.onnx",
+        
         model_path="ResnetMel",
         matcher=matcher,
         window_length=1.0,

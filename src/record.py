@@ -24,7 +24,7 @@ def record_samples(filename = 'sample', num_samples=3, duration=3, sr=16000):
         # Save the audio as a WAV file
         # Convert float32 audio to int16 for WAV format (standard for WAV files)
         audio_int16 = (audio.flatten() * 32767).astype(np.int16)
-        wavfile.write(f"{filename}_{i+1}.wav", sr, audio_int16)
+        wavfile.write(f"./Audios4testing/{filename}_{i+1}.wav", sr, audio_int16)
         print(f"Recording finished for sample {i+1}. Saved as 'sample_{i+1}.wav'.")
     return samples
 
