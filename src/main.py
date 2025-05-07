@@ -27,7 +27,12 @@ from colorama import Fore, Style
 # classes_path = "./mswc3_cache/classes.txt"
 
 # 123 classes version stable one
-checkpoint_path = "./lightning_logs/version_31/checkpoints/epoch=11-step=136404.ckpt"
+# checkpoint_path = "./lightning_logs/version_31/checkpoints/epoch=9-step=113670.ckpt"
+# checkpoint_path = "./lightning_logs/version_31/checkpoints/epoch=11-step=136404.ckpt"
+# checkpoint_path = "./lightning_logs/version_33/checkpoints/epoch=12-step=147771.ckpt"
+# checkpoint_path = "./lightning_logs/version_33/checkpoints/epoch=16-step=193239.ckpt"
+# checkpoint_path = "./lightning_logs/version_33/checkpoints/epoch=19-step=227340.ckpt"
+checkpoint_path = "./lightning_logs/version_33/checkpoints/epoch=24-step=284175.ckpt"
 
 class SimpleMicStream:
     """Handles real-time audio capture from microphone"""
