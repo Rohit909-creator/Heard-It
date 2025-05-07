@@ -15,8 +15,8 @@ import torch
 from colorama import Fore, Style
 
 # 123 classes version stable one
-checkpoint_path = "./lightning_logs/version_33/checkpoints/epoch=24-step=284175.ckpt"
-
+# checkpoint_path = "./lightning_logs/version_33/checkpoints/epoch=24-step=284175.ckpt"
+checkpoint_path = "lightning_logs/version_31/checkpoints/epoch=11-step=136404.ckpt"
 class SimpleMicStream:
     """Handles real-time audio capture from microphone"""
     def __init__(self, sample_rate: int = 16000, chunk_size: int = 1024):
