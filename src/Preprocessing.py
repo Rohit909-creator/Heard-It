@@ -344,9 +344,44 @@ def save_files2folders(audio_dir:str):
         shutil.move(src_path, dest_path)
         # break
     
+def check4foldersize(audio_dir:str, audio_dir2:str):
     
-                      
-
+    import shutil
+    
+    audio_folders = os.listdir(audio_dir)
+    audio_folder_paths = []
+    # audio_files = [audio_file for audio_file in audio_files if ".opus" in audio_file]
+    # print(audio_folders)
+    for audio_folder in audio_folders:
+        
+        audio_files = os.listdir(os.path.join(audio_dir, audio_folder))
+        
+        if len(audio_files) > 3000 and len(audio_files) < 5050:
+            print(f"{audio_folder}: {len(audio_files)}") 
+            audio_folder_paths.append(os.path.join(audio_dir, audio_folder))       
+        # for audio_file in audio_files:
+        #     src_path = os.path.join(audio_dir, audio_file)
+    
+    for audio_folder_path in audio_folder_paths:
+        dest_path = os.path.join(audio_dir2, os.path.basename(audio_folder_path))
+        if not os.path.exists(dest_path):  # Avoid overwriting if already exists
+            shutil.copytree(audio_folder_path, dest_path)
+            
+def check4foldersize(audio_dir:str):
+        
+    audio_folders = os.listdir(audio_dir)
+    audio_folder_paths = []
+    # audio_files = [audio_file for audio_file in audio_files if ".opus" in audio_file]
+    # print(audio_folders)
+    for audio_folder in audio_folders:
+        
+        audio_files = os.listdir(os.path.join(audio_dir, audio_folder))
+        
+        if len(audio_files) > 1000:
+            print(f"{audio_folder}: {len(audio_files)}") 
+            # audio_folder_paths.append(os.path.join(audio_dir, audio_folder))
+            
+                    
 if __name__ == "__main__":
     
     # Preprocess the dataset
@@ -356,7 +391,7 @@ if __name__ == "__main__":
         max_duration=1.0
     )
     
-    print(X.shape, y.shape)
+    # print(X.shape, y.shape)
 
     # # Create dataset and dataloader
     # dataset = AudioMelDataset(X, y)
@@ -377,3 +412,187 @@ if __name__ == "__main__":
     
     # audio_dir = "./AI_Audios_Augmented"
     # save_files2folders(audio_dir)
+    
+    # audio_dir = r"C:\Users\Rohit Francis\Desktop\Codes\Datasets\en\clips"
+    # audio_dir2 = "./Audio_dataset3"
+    # check4foldersize(audio_dir, audio_dir2)
+    
+    # audio_dir = "./Audio_dataset2"
+    # check4foldersize(audio_dir)
+    
+# considered: 2046
+# crystal: 2003
+# dog: 2024
+# door: 2034
+# hot: 2034
+# lake: 2040
+# london: 2026
+# omens: 2010
+# outside: 2047
+# tried: 2005
+# wait: 2038
+# week: 2042
+
+
+# anything: 4460
+# away: 5004
+# being: 4187
+# best: 4224
+# children: 4306
+# county: 4371
+# desert: 4993
+# every: 4626
+# everything: 4534
+# few: 4237
+# great: 4253
+# heart: 4317
+# help: 4437
+# himself: 4178
+# large: 4219
+# last: 4895
+# let: 4298
+# located: 4770
+# money: 4175
+# music: 4657
+# named: 5044
+# next: 4576
+# own: 4584
+# please: 4445
+# really: 4726
+# second: 4214
+# seven: 4239
+# six: 4812
+# small: 4696
+# station: 4076
+# thing: 4207
+# under: 4461
+# war: 4961
+# water: 5023
+# without: 4437
+# woman: 4739
+# young: 4273
+
+
+
+# air: 3149
+# album: 3235
+# almost: 3145
+# already: 3444
+# among: 3066
+# answered: 3114
+# anything: 4460
+# away: 5004
+# become: 3393
+# being: 4187
+# best: 4224
+# black: 3390
+# children: 4306
+# college: 3042
+# company: 3228
+# county: 4371
+# days: 3699
+# desert: 4993
+# different: 3478
+# doing: 3270
+# done: 3665
+# early: 3631
+# eight: 3389
+# end: 3979
+# englishman: 3100
+# ever: 3342
+# every: 4626
+# everyone: 3270
+# everything: 4534
+# family: 3707
+# father: 3492
+# few: 4237
+# fire: 3314
+# following: 3092
+# game: 3569
+# girl: 3313
+# give: 3797
+# great: 4253
+# group: 3763
+# heard: 3422
+# heart: 4317
+# help: 4437
+# himself: 4178
+# idea: 3057
+# important: 3133
+# include: 3234
+# knew: 3611
+# language: 3295
+# large: 4219
+# last: 4895
+# let: 4298
+# line: 3153
+# live: 3504
+# located: 4770
+# looked: 3950
+# looking: 3402
+# main: 3044
+# mean: 3437
+# might: 3825
+# mind: 3179
+# money: 4175
+# morning: 3109
+# music: 4657
+# named: 5044
+# national: 3038
+# near: 3321
+# next: 4576
+# nine: 3243
+# north: 3700
+# number: 3607
+# once: 3710
+# open: 3042
+# own: 4584
+# party: 3298
+# play: 3850
+# played: 3385
+# please: 4445
+# point: 3321
+# public: 3466
+# put: 3307
+# read: 3597
+# really: 4726
+# red: 3693
+# river: 3735
+# road: 3311
+# second: 4214
+# seemed: 3555
+# served: 3034
+# set: 3291
+# seven: 4239
+# sheep: 3275
+# show: 3574
+# since: 3480
+# six: 4812
+# small: 4696
+# sometimes: 3009
+# son: 3194
+# soon: 3144
+# south: 3741
+# state: 3539
+# station: 4076
+# street: 3053
+# sun: 3522
+# system: 3275
+# thing: 4207
+# times: 3161
+# today: 3988
+# top: 3086
+# under: 4461
+# university: 3862
+# until: 3073
+# wanted: 3518
+# war: 4961
+# water: 5023
+# well: 3409
+# white: 3458
+# wind: 3141
+# within: 3258
+# without: 4437
+# woman: 4739
+# yes: 3316
+# young: 4273

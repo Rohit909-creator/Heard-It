@@ -12,6 +12,7 @@ import pandas as pd
 from Preprocessing import preprocess_audio_dataset, AudioMelDataset
 import numpy as np
 
+
 # device = torch.device('cuda' if torch.cuda.is_available() else "cpu")
 
 class ResNetMelLite(pl.LightningModule):
@@ -350,7 +351,7 @@ def train_model():
     #                     enable_progress_bar=True,  # Disable default tqdm ba
     #                     )
     
-    trainer = pl.Trainer(max_epochs=15,
+    trainer = pl.Trainer(max_epochs=28,
                         enable_progress_bar=True,  # Disable default tqdm ba
                         num_nodes=1,
                         enable_checkpointing=True

@@ -14,9 +14,21 @@ from Utils import Matcher, EnhancedSimilarityMatcher, fetch_audios
 import torch
 from colorama import Fore, Style
 # checkpoint_path = "./lightning_logs/version_23/checkpoints/epoch=14-step=46560.ckpt"
-checkpoint_path = "./lightning_logs/version_27/checkpoints/epoch=9-step=31040.ckpt"
+# checkpoint_path = "./lightning_logs/version_27/checkpoints/epoch=9-step=31040.ckpt"
+# checkpoint_path = "./lightning_logs/version_27/checkpoints/epoch=14-step=46560.ckpt"
 # checkpoint_path = "./lightning_logs/version_25/checkpoints/epoch=13-step=44142.ckpt"
 # checkpoint_path = "./lightning_logs/version_26/checkpoints/epoch=24-step=78825.ckpt"
+
+# 269 classes model
+# checkpoint_path = "./lightning_logs/version_29/checkpoints/epoch=9-step=34120.ckpt"
+# checkpoint_path = "./lightning_logs/version_29/checkpoints/epoch=6-step=23884.ckpt"
+# checkpoint_path = "./lightning_logs/version_29/checkpoints/epoch=9-step=34120.ckpt"
+# checkpoint_path = "./lightning_logs/version_30/checkpoints/epoch=19-step=68240.ckpt"
+# classes_path = "./mswc3_cache/classes.txt"
+
+# 123 classes version stable one
+checkpoint_path = "./lightning_logs/version_31/checkpoints/epoch=11-step=136404.ckpt"
+
 class SimpleMicStream:
     """Handles real-time audio capture from microphone"""
     def __init__(self, sample_rate: int = 16000, chunk_size: int = 1024):
@@ -83,8 +95,13 @@ class HotwordDetector:
         # Initialize model
         # self.model = CRNN.load_from_checkpoint(checkpoint_path, num_classes=74).to('cpu')
         # self.model = ResNetMel.load_from_checkpoint(checkpoint_path, num_classes=52).to('cpu')
-        self.model = ResNetMelLite.load_from_checkpoint(checkpoint_path, num_classes=52).to('cpu')
+        self.model = ResNetMelLite.load_from_checkpoint(checkpoint_path, num_classes=123).to('cpu')
         # self.model = ResNetMel.load_from_checkpoint(checkpoint_path, num_classes=387).to('cpu')
+        
+        
+        # 269 class version 
+        # self.model = ResNetMelLite.load_from_checkpoint(checkpoint_path, num_classes=269).to('cpu')
+        
         self.model.model.fc[4] = torch.nn.Sequential()
         self.model.eval()
         self.matcher = matcher
@@ -149,9 +166,17 @@ def main():
     import librosa
     from colorama import Fore, Style
     
+    # with open(classes_path, "r") as f:
+    #     s = f.read()
+    # num_classes = len(s.split("/n"))
+    
     base_dir = "./"
     device = torch.device('cpu')
-    model = ResNetMelLite.load_from_checkpoint(checkpoint_path, num_classes=52).to('cpu')
+    
+    model = ResNetMelLite.load_from_checkpoint(checkpoint_path, num_classes=123).to('cpu')
+    
+    # 269 class version
+    # model = ResNetMelLite.load_from_checkpoint(checkpoint_path, num_classes=269).to('cpu')
     # self.model = ResNetMel.load_from_checkpoint(checkpoint_path, num_classes=387).to('cpu')
     model.model.fc[4] = torch.nn.Sequential()
     model.eval()
@@ -162,6 +187,8 @@ def main():
     # matcher = Matcher()
     
     positive_embeddings = []
+    
+    
     
     name = input(f"{Fore.BLUE}Enter the wakeword name you want to use{Style.RESET_ALL}({Fore.GREEN}shiva, shivan, shambu, alexa, sam, munez, nigga{Style.RESET_ALL}): ")
     if name == "alexa":
@@ -194,9 +221,13 @@ def main():
         os.path.join("./Audios4testing/Skywalker_en-AU-kylie.mp3"),
         os.path.join("./Audios4testing/Hello0.mp3"),
         os.path.join("./Audios4testing/Hello1.mp3"),
-        os.path.join("./Audios4testing/Augh.wav"),
-        os.path.join("./Audios4testing/Augh2.wav"),
-        os.path.join("./Audios4testing/Ummmm.wav"),
+        # os.path.join("./Audios4testing/Augh.wav"),
+        # os.path.join("./Audios4testing/Augh2.wav"),
+        # os.path.join("./Audios4testing/Ummmm.wav"),
+        # os.path.join("./Audios4testing/Aahuhuhaah.wav"),
+        # os.path.join("./Audios4testing/blah.wav"),
+        # os.path.join("./Audios4testing/tap.wav"),
+        # os.path.join("./Audios4testing/taptaptap.wav"),
     ]
     for path in audio_paths:
         mel_spec = load_and_preprocess_audio_file(path, max_duration=1.0)
@@ -219,7 +250,7 @@ def main():
         model_path="ResnetMel",
         matcher=matcher,
         window_length=1.0,
-        threshold=0.70  # Adjust based on your needs
+        threshold=0.67  # Adjust based on your needs
         # threshold=0.79239375
     )
     

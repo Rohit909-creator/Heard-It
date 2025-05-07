@@ -273,11 +273,15 @@ class WakewordEvaluator:
 if __name__ == "__main__":
     # Define model and classes file paths here
     # model_path = "./lightning_logs/version_28/checkpoints/epoch=8-step=28107.ckpt"
-    # classes_path = "./mswc3_cache/classes.txt"
+    # model_path = "./lightning_logs/version_29/checkpoints/epoch=9-step=34120.ckpt"
+    # model_path = "./lightning_logs/version_30/checkpoints/epoch=19-step=68240.ckpt"
+    model_path = "./lightning_logs/version_31/checkpoints/epoch=11-step=136404.ckpt"
+    # model_path = "./lightning_logs/version_31/checkpoints/epoch=9-step=113670.ckpt"
+    classes_path = "./mswc3_cache/classes.txt"
     
     # Alternative paths (uncomment to use)
-    model_path = "./lightning_logs/version_27/checkpoints/epoch=14-step=46560.ckpt" # sam is detected threshold avg = 0.64987453 or 0.6498745325952768
-    classes_path = "./mswc_cache/classes.txt"
+    # model_path = "./lightning_logs/version_27/checkpoints/epoch=14-step=46560.ckpt" # sam is detected threshold avg = 0.64987453 or 0.6498745325952768
+    # classes_path = "./mswc_cache/classes.txt"
     # model_path = "./lightning_logs/version_27/checkpoints/epoch=9-step=31040.ckpt" # sam is not detected threshold avg = 0.79239375 or 0.7917719706892967
     # classes_path = "./mswc_cache/classes.txt"
     
