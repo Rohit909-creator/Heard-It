@@ -6,6 +6,8 @@ import time
 from typing import Optional, Dict
 import json
 import os
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
+os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
 from Trainer import ResNetMel, ResNetMelLite
 # from Inference import Matcher
 from Preprocessing import load_and_preprocess_audio_file, load_and_preprocess_audio
@@ -110,7 +112,7 @@ class HotwordDetector:
             # print(audio_window.shape)
             mel_spec = load_and_preprocess_audio(audio_window, sr=16000, max_duration=1.0)
             
-            mel_spec_tensor = torch.tensor([mel_spec], dtype=torch.float32)
+            mel_spec_tensor = torch.from_numpy(np.array([mel_spec])).float()
             mel_spec_tensor = mel_spec_tensor.unsqueeze(1)
             mel_spec_tensor = mel_spec_tensor
             # print(mel_spec_tensor.shape)
@@ -161,7 +163,8 @@ def main():
     
     for path in audio_file_paths:
         mel_spec = load_and_preprocess_audio_file(path, max_duration=1.0)
-        mel_spec_tensor = torch.tensor([mel_spec], dtype=torch.float32)
+        mel_spec_array = np.array([mel_spec])
+        mel_spec_tensor = torch.from_numpy(mel_spec_array).float()
         mel_spec_tensor = mel_spec_tensor.unsqueeze(1)
         embs = model(mel_spec_tensor)
         # print(embs.dtype)
@@ -180,7 +183,7 @@ def main():
     ]
     for path in audio_paths:
         mel_spec = load_and_preprocess_audio_file(path, max_duration=1.0)
-        mel_spec_tensor = torch.tensor([mel_spec], dtype=torch.float32)
+        mel_spec_tensor = torch.from_numpy(mel_spec).unsqueeze(0).float()
         mel_spec_tensor = mel_spec_tensor.unsqueeze(1)
         embs = model(mel_spec_tensor)
         negative_embeddings.append(embs)

@@ -3,6 +3,7 @@ import glob
 import torch
 import numpy as np
 import torchaudio
+import librosa
 from sklearn.preprocessing import LabelEncoder
 import torch.nn.functional as F
 from tqdm import tqdm
@@ -138,7 +139,10 @@ def load_and_preprocess_audio_file(audio_path, sample_rate=16000, n_mels=40, n_f
     Using the same function for both training and inference ensures consistency.
     """
     # Load audio file
-    waveform, sr = torchaudio.load(audio_path)
+    waveform, sr = librosa.load(audio_path, sr=None)
+    waveform = torch.from_numpy(waveform)
+    if waveform.dim() == 1:
+        waveform = waveform.unsqueeze(0)
     # print("In load audio from file: ", waveform.shape, sr)
     # Convert to mono if needed
     if waveform.shape[0] > 1:

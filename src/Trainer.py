@@ -11,6 +11,7 @@ from tqdm import tqdm
 import pandas as pd
 from Preprocessing import preprocess_audio_dataset, AudioMelDataset
 import numpy as np
+from torchvision.models import ResNet18_Weights
 
 
 # device = torch.device('cuda' if torch.cuda.is_available() else "cpu")
@@ -34,7 +35,7 @@ class ResNetMelLite(pl.LightningModule):
         self.mel_bins = mel_bins
         
         # Load the standard ResNet18 model
-        self.model = torchvision.models.resnet18(pretrained=pretrained)
+        self.model = torchvision.models.resnet18(weights=ResNet18_Weights.IMAGENET1K_V1)
         
         
         # Modify the first convolutional layer to accept 1 channel instead of 3
@@ -163,7 +164,7 @@ class ResNetMel(pl.LightningModule):
         self.mel_bins = mel_bins
         
         # Load the standard ResNet18 model
-        self.model = torchvision.models.resnet18(pretrained=pretrained)
+        self.model = torchvision.models.resnet18(weights=ResNet18_Weights.IMAGENET1K_V1)
         
         
         # Modify the first convolutional layer to accept 1 channel instead of 3
